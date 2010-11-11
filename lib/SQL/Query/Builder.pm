@@ -50,7 +50,9 @@ BEGIN {
       my $col  = shift;
       my @query;
       my @bind;
-      
+     
+#use Data::Dumper;
+#warn Dumper({SET_BUILD => $self->value}); 
       foreach my $val ($self->value) {
          my ($q,@b) = $val->build($col);
          push @query, $q;

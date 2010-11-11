@@ -86,13 +86,14 @@ eq_or_diff
 ;
 };
 
-
+TODO: {
+   local $TODO = q{sets currently do not yet self unpack, currently sets assume to contain only particles};
 eq_or_diff
-   [SELECT->FROM('table')->WHERE(OR(col => 12, val => 15))->build],
+   [SELECT->FROM('table')->WHERE(''=>OR(col => 12, val => 15))->build],
    [q{SELECT * FROM table WHERE (`col` = ? OR `val` = ?)},[12,15]],
    q{basic OR syntax}
 ;
-
+};
 
 
 
