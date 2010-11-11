@@ -1,9 +1,4 @@
-use strict;
-use warnings;
 package SQL::Query::Builder;
-
-1;
-package Util::DB::QueryBuilder;
 use strict;
 use warnings;
 use Exporter qw{import};
@@ -29,7 +24,6 @@ our %EXPORT_TAGS = (all => \@EXPORT);
 BEGIN {
    package Util::DB::QueryBuilder::Set;
    use Moose;
-   use Util::Log;
    
    has joiner => 
       is => 'rw',
@@ -72,7 +66,6 @@ BEGIN {
 BEGIN {
    package Util::DB::QueryBuilder::Particle;
    use Moose;
-   use Util::Log;
    use Data::Manip qw{flat};
 
    has op => 
@@ -113,7 +106,6 @@ BEGIN {
 BEGIN {
    package Util::DB::QueryBuilder::Builder;
    use Moose;
-   use Util::Log;
    use Sub::Identify qw{sub_name};
    use Quantum::Superpositions;
    use Data::Manip qw{flat};
@@ -198,7 +190,6 @@ BEGIN {
       my $query = join ' ', grep{defined && length}
                   sprintf( q{SELECT %s FROM %s}, COM($self->WHAT), COM($self->FROM)),
                   map{ my ($q,@b) = $self->$_;
-                       #DUMP {$_ =>{$q => \@b}};
                        push @bind, @b if @b;
                        $q;
                      } qw{JOIN WHERE GROUP ORDER LIMIT };
@@ -212,7 +203,6 @@ BEGIN {
 BEGIN {
    package Util::DB::QueryBuilder::Query;
    use Moose;
-   use Util::Log;
    use Sub::Identify qw{sub_name};
 
    # DSL : { attr_name => isa_type,
@@ -246,7 +236,6 @@ BEGIN {
          $def->{default} = ref($default) ? sub{$default} : $default;
       }
       $def->{auto_deref} = 1 if $type =~ m/Ref/; # auto_deref if a ref
-      #DUMP {ATTR => {$name => $def}};
       has $name => %$def ;
    }
    # allow for chains to be made for all the UPPERCASE attrs ONLY!!!
@@ -254,7 +243,6 @@ BEGIN {
       my $next = shift;
       my $self = shift;
       my $rv   = $self->$next(@_);
-      #DUMP {SETTER => scalar(@_), IN => \@_, NAME => sub_name($next)};
       return scalar(@_) ? $self : $rv ; # allow for chains if in 'setter' mode
    };
 
