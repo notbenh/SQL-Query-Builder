@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 use Test::Most qw{no_plan };
-use Util::DB::QueryBuilder qw{:all};
+use SQL::Query::Builder qw{:all};
 
 BEGIN { print qq{\n} for 1..10};
 

@@ -22,7 +22,7 @@ our %EXPORT_TAGS = (all => \@EXPORT);
 
 
 BEGIN {
-   package Util::DB::QueryBuilder::Set;
+   package SQL::Query::Builder::Set;
    use Moose;
    
    has joiner => 
@@ -64,7 +64,7 @@ BEGIN {
 }
 
 BEGIN {
-   package Util::DB::QueryBuilder::Particle;
+   package SQL::Query::Builder::Particle;
    use Moose;
    use Data::Manip qw{flat};
 
@@ -104,7 +104,7 @@ BEGIN {
 
 
 BEGIN {
-   package Util::DB::QueryBuilder::Builder;
+   package SQL::Query::Builder::Builder;
    use Moose;
    use Sub::Identify qw{sub_name};
    use Quantum::Superpositions;
@@ -112,7 +112,7 @@ BEGIN {
 
    has query => 
       is => 'ro',
-      isa => 'Util::DB::QueryBuilder::Query',
+      isa => 'SQL::Query::Builder::Query',
       required => 1,
       #handles => [map{$_, qq{has_$_}} qw{WHAT FROM JOIN WHERE GROUP ORDER LIMIT type}],
    ;
@@ -121,8 +121,8 @@ BEGIN {
    #  DSL
    #---------------------------------------------------------------------------
    sub COM (@) { join ', ', @_ };
-   sub P ($$) {Util::DB::QueryBuilder::Particle->new(op => shift, value => shift)}
-   sub S ($$) {Util::DB::QueryBuilder::Set->new(joiner => shift, value => shift)}
+   sub P ($$) {SQL::Query::Builder::Particle->new(op => shift, value => shift)}
+   sub S ($$) {SQL::Query::Builder::Set->new(joiner => shift, value => shift)}
 
    #---------------------------------------------------------------------------
    #  PARTS
@@ -201,7 +201,7 @@ BEGIN {
 }; 
 
 BEGIN {
-   package Util::DB::QueryBuilder::Query;
+   package SQL::Query::Builder::Query;
    use Moose;
    use Sub::Identify qw{sub_name};
 
@@ -262,7 +262,7 @@ BEGIN {
                  : @{$self->$next}; #deref
    };
 
-   sub build { Util::DB::QueryBuilder::Builder->new(query => shift)->build(@_); }
+   sub build { SQL::Query::Builder::Builder->new(query => shift)->build(@_); }
       
       
       
@@ -273,7 +273,7 @@ BEGIN {
 #  QUERY TYPES
 #---------------------------------------------------------------------------
 sub SELECT {
-   my $q = Util::DB::QueryBuilder::Query->new;
+   my $q = SQL::Query::Builder::Query->new;
    $q->WHAT(@_) if @_;
    return $q;
 };
@@ -282,14 +282,14 @@ sub SELECT {
 #---------------------------------------------------------------------------
 #  SYNTAX HELPERS
 #---------------------------------------------------------------------------
-sub _particle{ Util::DB::QueryBuilder::Particle->new(op => shift, value => shift) };
+sub _particle{ SQL::Query::Builder::Particle->new(op => shift, value => shift) };
 sub gt  ($) {_particle('>' , shift)}
 sub gte ($) {_particle('>=', shift)}
 
 sub lt  ($) {_particle('<' , shift)}
 sub lte ($) {_particle('<=', shift)} 
 
-sub _set{ Util::DB::QueryBuilder::Set->new( joiner => shift, value => \@_)}
+sub _set{ SQL::Query::Builder::Set->new( joiner => shift, value => \@_)}
 sub OR  {_set(OR  => @_)}
 sub AND {_set(AND => @_)}
 
