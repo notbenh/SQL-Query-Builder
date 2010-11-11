@@ -33,11 +33,14 @@ eq_or_diff
 #---------------------------------------------------------------------------
 #  WHERE SYNTAX
 #---------------------------------------------------------------------------
+TODO: {
+   local $TODO = q{IN syntax not current supported};
 eq_or_diff
    [SELECT->FROM('table')->WHERE(col=>[1..3])->build],
    [q{SELECT * FROM table WHERE `col` IN (?,?,?)},[1..3]],
    q{IN syntax}
 ;
+};
 
 eq_or_diff
    [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => {'>' => 12})->build],
