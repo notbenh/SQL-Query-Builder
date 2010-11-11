@@ -20,6 +20,7 @@ our @EXPORT = qw{
 };
 our %EXPORT_TAGS = (all => \@EXPORT);
 
+# ABSTRACT: An object based query builder
 
 BEGIN {
    package SQL::Query::Builder::Set;
