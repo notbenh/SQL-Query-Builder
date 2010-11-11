@@ -45,14 +45,14 @@ BEGIN {
       required => 1,
    ;
 
-   sub render {
+   sub build {
       my $self = shift;
       my $col  = shift;
       my @query;
       my @bind;
       
       foreach my $val ($self->value) {
-         my ($q,@b) = $val->render($col);
+         my ($q,@b) = $val->build($col);
          push @query, $q;
          push @bind, @b;
       
@@ -94,7 +94,7 @@ BEGIN {
       $self->op =~ m/^(?:IN)$/ ? qq{($str)} : $str;
    }
 
-   sub render {
+   sub build {
       my $self = shift;
       my $col  = shift;
       return sprintf( q{`%s` %s %s}, $col, $self->op, $self->wrap($self->value) )
@@ -155,7 +155,7 @@ BEGIN {
          my @bits = upk($val);
          foreach my $bit (@bits) {
             my ($q,@b) = ref($bit)
-                       ?  $bit->render($col)
+                       ?  $bit->build($col)
                        : {WTF => $bit} ;
 
             push @query, $q;
