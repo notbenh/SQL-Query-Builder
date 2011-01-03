@@ -223,16 +223,15 @@ BEGIN {
                 type  => [Str     => 'SELECT'],
               };
 
-   my @chainable_attrs;
 
    for my $name ( keys %$attr ) {
       my ($type,$default) = ref($attr->{$name}) ? @{$attr->{$name}} : $attr->{$name};
       my $required = $name =~ s/^!//;
-      push @chainable_attrs, $name if uc($name) eq $name; # only push all upper attrs to chainable
       my $def = {
-         is => 'rw',
-         isa => $type,
-         clearer => qq{clear_$name},
+         is        => 'rw',
+         isa       => $type,
+         traits    => [ 'Chained' ],
+         clearer   => qq{clear_$name},
          predicate => qq{has_$name},
       };
       if ( defined $default ) {
@@ -241,13 +240,6 @@ BEGIN {
       $def->{auto_deref} = 1 if $type =~ m/Ref/; # auto_deref if a ref
       has $name => %$def ;
    }
-   # allow for chains to be made for all the UPPERCASE attrs ONLY!!!
-   around \@chainable_attrs => sub{
-      my $next = shift;
-      my $self = shift;
-      my $rv   = $self->$next(@_);
-      return scalar(@_) ? $self : $rv ; # allow for chains if in 'setter' mode
-   };
 
    # 'coerce' lists => HashRef if we were passed anything
    around [qw{JOIN WHERE}] => sub{
