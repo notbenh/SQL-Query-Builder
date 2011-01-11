@@ -47,8 +47,12 @@ BEGIN {
       predicate => qq{has_$_},
    for qw{query bindvars};
 
-   sub input {}
-   sub output{}
+   # just some sane defaults
+   sub input {shift->query(\@_)} # just toss everything in to query
+   sub output{
+      my $self = shift;
+      return [$self->query, $self->bindvars];
+   }
 };
 
 BEGIN {
@@ -56,6 +60,11 @@ BEGIN {
    use Util::Log;
    use Mouse;
    extends qw{SQL::Query::Builder::Query::Part};
+
+   sub output {
+      my $self = shift;
+      return '*' unless $self->has_query;
+      return join ', ', @{ $self->query }};
 };
 
 BEGIN {
@@ -70,6 +79,26 @@ BEGIN {
    use Util::Log;
    use Mouse;
    extends qw{SQL::Query::Builder::Query::Part};
+=pod
+   # WHERE is really a hash, treat it as such
+   around WHERE => sub{
+      my $next = shift;
+      my $self = shift;
+      return $self->$next(@_) if @_; # DO NOT MODIFY if we are trying to set a value
+      my %WHERE = $self->$next();
+      DUMP {WHERE => \%WHERE};
+      my @out;
+      # we need to unzip keys and values, but we need them to remain in 'sync' two arrays are used
+      foreach my $key (keys %WHERE) {
+         my $value = $WHERE{$key};
+         push @{$self->bindvars}, $value;
+         push @out, sprintf qq{%s = ?}, $key ;
+      }
+      
+      
+      @out;
+   };
+=cut
 };
 
 BEGIN {
@@ -132,15 +161,12 @@ BEGIN {
          is => 'rw',
          isa => qq{SQL::Query::Builder::Query::Part},
          lazy => 1,
-         #auto_deref => 1, 
          default => sub{
             my $class = qq{SQL::Query::Builder::Query::Part::$part};
             eval qq{require $class};
             $class->new;
          }, 
          handles => { # my => there
-                      #qq{read_$part}           => q{output},
-                      #qq{write_$part}          => q{input},
                       qq{has_query_$part}      => q{has_query},
                       qq{clear_query_$part}    => q{clear_query},
                       qq{has_bindvars_$part}   => q{has_bindvars},
@@ -149,56 +175,26 @@ BEGIN {
          predicate => qq{has_$part},
          clearer => qq{clear_$part},
       ;
+   
+      # I want to keep the 'moose' API where you have one method that deligates to 
+      # get or set the value, though this attr is an object. I don't want to reset
+      # the object, I want to set values in the object. Though 'has' builds us our
+      # the method to access the object, but it's going to point to the wrong place.
+      # This modifier corrects this so we can still call 'WHAT' but it pushes the 
+      # data passed to WHAT->input(@_) and input will do 'the right thing' from there.
 
-      # because this attr is really an obj, we want to point at the right method based on context
-      # if we are setting a value, then pass it to the objects input method, else call output
-      # this allows this object to look like a simple attr from the API standpoint
+      # Also while we are looping, I want to be able to chain these methods if they 
+      # are called in 'setter' mode. Note the 'do' block returns $self.
       around $part => sub{
          my $next = shift;
          my $self = shift;
-         return @_ ? $self->$next->input(@_) : $self->$next->output;
+         return @_ ? do{$self->$next->input(@_);$self} : $self->$next->output;
       };
    }
 
-   # allow for chaining when setting values;
-   around [QUERY_PARTS] => sub {
-      my $next = shift;
-      my $self = shift;
-      # DO NOT CHAIN if we are just attempting to access the value of this attr
-      # we 'coerce' here vs building a type as type coerce only takes the first value, we want all input
-      my $rv = $self->$next( scalar(@_) == 0                          ? @_    # this is an accessor, just get value
-                           : scalar(@_) == 1 && ref($_[0]) eq 'ARRAY' ? $_[0] # we were passed an arrayref, store it
-                           :                                            \@_   # 'coerce': ref what was passed 
-                           );
-      return @_ ? $self : defined $rv ? @$rv : undef;
-   };
-=pod
-=cut
-=pod
-   # WHERE is really a hash, treat it as such
-   around WHERE => sub{
-      my $next = shift;
-      my $self = shift;
-      return $self->$next(@_) if @_; # DO NOT MODIFY if we are trying to set a value
-      my %WHERE = $self->$next();
-      DUMP {WHERE => \%WHERE};
-      my @out;
-      # we need to unzip keys and values, but we need them to remain in 'sync' two arrays are used
-      foreach my $key (keys %WHERE) {
-         my $value = $WHERE{$key};
-         push @{$self->bindvars}, $value;
-         push @out, sprintf qq{%s = ?}, $key ;
-      }
-      
-      
-      @out;
-   };
-=cut
    sub dbi   { shift }
    sub build { 
       my $self = shift;
-      #$self->clear_bindvars; # clear out any old cruft to rebuild again;
-      
       my @query = grep{ defined }
                     $self->type
                   , join( ', ', $self->WHAT) || undef 
