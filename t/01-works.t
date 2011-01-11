@@ -4,7 +4,9 @@ use strict;
 use warnings;
 
 use Test::Most qw{no_plan };
-use SQL::Query::Builder qw{:all};
+#use SQL::Query::Builder qw{:all};
+use SQL::Query::Builder;
+use Util::Log;
 
 BEGIN { print qq{\n} for 1..10};
 
@@ -24,23 +26,40 @@ eq_or_diff
 ;
 
 
+#---------------------------------------------------------------------------
+#  WHAT SYNTAX
+#---------------------------------------------------------------------------
 eq_or_diff
    [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => 12)->GROUP(qw{kitten cute})->LIMIT(1)->build],
    [SELECT(qw{this that})->FROM(qw{here there})->WHERE(col => 12)->GROUP(qw{kitten cute})->LIMIT(1)->build],
    q{checking both types of WHAT syntax}
 ;
 
+__END__
+
 #---------------------------------------------------------------------------
 #  WHERE SYNTAX
 #---------------------------------------------------------------------------
+eq_or_diff
+   [SELECT->FROM('table')->WHERE(col=>OR[1..3])->build],
+   [q{SELECT * FROM table WHERE (`col` = ? OR `col` = ? OR `col` = ?)},[1..3]],
+   q{ArrayRef is an implied OR block}
+;
+eq_or_diff
+   [SELECT->FROM('table')->WHERE(col=>[1..3])->build],
+   [q{SELECT * FROM table WHERE (`col` = ? OR `col` = ? OR `col` = ?)},[1..3]],
+   q{ArrayRef is an implied OR block}
+;
 TODO: {
    local $TODO = q{IN syntax not current supported};
 eq_or_diff
-   [SELECT->FROM('table')->WHERE(col=>[1..3])->build],
+   [SELECT->FROM('table')->WHERE(col=>IN[1..3])->build],
    [q{SELECT * FROM table WHERE `col` IN (?,?,?)},[1..3]],
    q{IN syntax}
 ;
 };
+
+__END__
 
 eq_or_diff
    [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => {'>' => 12})->build],
@@ -64,7 +83,7 @@ eq_or_diff
                    ->FROM('db.table')
                    ->WHERE(val => lt 12)
            )->build],
-   [q{SELECT * FROM db.table WHERE col => (SELECT id FROM db.table WHERE val >= ?)},[12]],
+   [q{SELECT * FROM db.table WHERE col = (SELECT id FROM db.table WHERE val >= ?)},[12]],
    q{can do subselects}
 ;
 
@@ -81,7 +100,7 @@ eq_or_diff
                      ->LIMIT(1),
                    ],
            )->build],
-   [q{SELECT * FROM db.table WHERE col => (SELECT id FROM db.table WHERE val >= ?)},[12]],
+   [q{SELECT * FROM db.table WHERE ( col = (SELECT id FROM db.table WHERE val =< ?) OR (SELECT id FROM db.table WHERE val >= ?) ) },[12,12]],
    q{can do IN (subselects,subselect)}
 ;
 };

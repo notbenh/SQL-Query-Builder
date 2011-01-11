@@ -3,292 +3,228 @@ use strict;
 use warnings;
 use Exporter qw{import};
 our @EXPORT = qw{
-   SQL
    SELECT
-   UPDATE
-   INSERT
-   DELETE
-
-   gt
-   gte
-   lt
-   lte
 
    AND 
    OR
-   NOT
+   IN
+
+   LT
+   GT
 };
-our %EXPORT_TAGS = (all => \@EXPORT);
 
-# ABSTRACT: An object based query builder
+sub SELECT { 
+   my $q = SQL::Query::Builder::Query::Select->new;
+   #$q->WHAT(@_ ? @_ : '*'); # not given as part of new to trip the build in 'coerce' hook
+   return $q;
+}
 
+sub AND ($) {}
+sub OR  ($) {}
+sub IN  ($) {}
+sub GT  ($$){}
+sub LT  ($$){}
+
+
+
+
+
+#---------------------------------------------------------------------------
+#  OBJECTS
+#---------------------------------------------------------------------------
 BEGIN {
-   package SQL::Query::Builder::Set;
-   use Moose;
-   
-   has joiner => 
-      is => 'rw',
-      isa => 'Str',
-      default => 'AND',
-   ;
-   around joiner => sub{
-      my $next = shift;
-      my $self = shift;
-      my $v = $self->$next(@_);
-      $v =~ m/^\s+.*\s+$/ ? $v : qq{ $v }; # auto pad the whitespace
-   };
+   package SQL::Query::Builder::Query::Part;
+   use Util::Log;
+   use Sub::Identify ':all';
+   use Mouse;
 
-   has value => 
+   has $_ => 
       is => 'rw',
       isa => 'ArrayRef',
-      auto_deref => 1,
-      required => 1,
-   ;
+      lazy => 1,
+      default => sub{[]},
+      clearer => qq{clear_$_},
+      predicate => qq{has_$_},
+   for qw{query bindvars};
 
-   sub build {
-      my $self = shift;
-      my $col  = shift;
-      my @query;
-      my @bind;
-     
-#use Data::Dumper;
-#warn Dumper({SET_BUILD => $self->value}); 
-      foreach my $val ($self->value) {
-         my ($q,@b) = $val->build($col);
-         push @query, $q;
-         push @bind, @b;
-      
-      }
-
-      return sprintf( @query > 1 ? q{(%s)} : q{%s}
-                    , join $self->joiner, @query
-                    ), @bind;
-   }
-}
+   sub input {}
+   sub output{}
+};
 
 BEGIN {
-   package SQL::Query::Builder::Particle;
-   use Moose;
-   use Data::Manip qw{flat};
-
-   has op => 
-      is => 'rw',
-      isa => 'Str',
-   ;
-   
-   has op => 
-      is => 'rw',
-      isa => 'Str',
-      required => 1,
-   ;
-
-   has value => 
-      is => 'rw',
-      isa => 'Any',
-      required => 1,
-   ;
-
-   sub soq { join ',', map{'?'} flat( shift->value ) }
-
-   sub wrap{ 
-      my $self = shift;
-      my $str  = $self->soq;
-      $self->op =~ m/^(?:IN)$/ ? qq{($str)} : $str;
-   }
-
-   sub build {
-      my $self = shift;
-      my $col  = shift;
-      return sprintf( q{`%s` %s %s}, $col, $self->op, $self->wrap($self->value) )
-           , $self->value ;
-   }
-
-}
-
+   package SQL::Query::Builder::Query::Part::WHAT;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
 
 BEGIN {
-   package SQL::Query::Builder::Builder;
-   use Moose;
-   use Sub::Identify qw{sub_name};
-   use Quantum::Superpositions;
-   use Data::Manip qw{flat};
+   package SQL::Query::Builder::Query::Part::FROM;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
 
-   has query => 
-      is => 'ro',
-      isa => 'SQL::Query::Builder::Query',
-      required => 1,
-      #handles => [map{$_, qq{has_$_}} qw{WHAT FROM JOIN WHERE GROUP ORDER LIMIT type}],
-   ;
+BEGIN {
+   package SQL::Query::Builder::Query::Part::WHERE;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
 
-   #---------------------------------------------------------------------------
-   #  DSL
-   #---------------------------------------------------------------------------
-   sub COM (@) { join ', ', @_ };
-   sub P ($$) {SQL::Query::Builder::Particle->new(op => shift, value => shift)}
-   sub S ($$) {SQL::Query::Builder::Set->new(joiner => shift, value => shift)}
+BEGIN {
+   package SQL::Query::Builder::Query::Part::GROUP;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
 
-   #---------------------------------------------------------------------------
-   #  PARTS
-   #---------------------------------------------------------------------------
-   sub WHAT { shift->query->WHAT} #simple passthru for now
-   sub FROM { shift->query->FROM}
-   sub JOIN { return undef; }
-   sub WHERE {
-      my $self = shift;
-      return unless $self->query->has_WHERE;
+BEGIN {
+   package SQL::Query::Builder::Query::Part::HAVING;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
 
-      my %where = $self->query->WHERE; # unravle some of that deref magic
+BEGIN {
+   package SQL::Query::Builder::Query::Part::ORDER;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
 
-      my @query;
-      my @bind;
-
-      sub upk {
-         map { my $x = $_;
-               my $r = ref($x);
-            $r eq 'ARRAY' ? S OR  => [upk(@$x)]
-          : $r eq 'HASH'  ? S AND => [upk(map{ P $_ => $x->{$_}} keys %$_)]  # build a set of particles for everything # !!! NOTE WILL FAIL FOR RAW
-          : $r eq 'CODE'  ? upk($x->())
-          : $r eq ''      ? P '=' => $_ # make single scalar vals a particle for parsing later
-          :                 $_ ;
-         } @_;
-      }
-
-      while ( my ($col,$val) = each (%where) ) {
-         my @bits = upk($val);
-         foreach my $bit (@bits) {
-            my ($q,@b) = ref($bit)
-                       ?  $bit->build($col)
-                       : {WTF => $bit} ;
-
-            push @query, $q;
-            push @bind, flat(@b);
-         }
-      }
-
-
-      return 'WHERE '.join( ' AND ', @query ), @bind;
-   }
-   sub GROUP {
-      my $self = shift;
-      return $self->query->has_GROUP ? sprintf q{GROUP BY %s}, COM $self->query->GROUP : '';
-   }
-   sub ORDER {
-      my $self = shift;
-      return $self->query->has_ORDER ? sprintf q{ORDER BY %s}, COM $self->query->ORDER : '';
-   }
-   sub LIMIT {
-      my $self = shift;
-      return $self->query->has_LIMIT ? sprintf q{LIMIT %d}, $self->query->LIMIT : '';
-   }
-
-   sub build {
-      my $self = shift;
-      my $method = join '_', 'build', lc($self->query->type);
-      $self->$method(@_);
-   };
-
-   sub build_select {
-      my $self = shift;
-      my @bind;
-      my $query = join ' ', grep{defined && length}
-                  sprintf( q{SELECT %s FROM %s}, COM($self->WHAT), COM($self->FROM)),
-                  map{ my ($q,@b) = $self->$_;
-                       push @bind, @b if @b;
-                       $q;
-                     } qw{JOIN WHERE GROUP ORDER LIMIT };
-    
-      return ($query, \@bind); 
-   };
-   
-
-}; 
+BEGIN {
+   package SQL::Query::Builder::Query::Part::LIMIT;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
 
 BEGIN {
    package SQL::Query::Builder::Query;
-   use Moose;
-   use Sub::Identify qw{sub_name};
+   use Util::Log;
+   use Sub::Identify ':all';
+   use Mouse;
+   use Mouse::Util::TypeConstraints;
 
-   # DSL : { attr_name => isa_type,
-   #   '!required_attr'=> [isa_type => default],
-   #       };
-
-   my $attr = { WHAT  => [ArrayRef => ['*']],
-              '!FROM' => ArrayRef => 
-                JOIN  => HashRef  => 
-                WHERE => HashRef  =>
-                GROUP => ArrayRef => 
-                ORDER => ArrayRef => 
-                LIMIT => Int      => 
-
-                type  => [Str     => 'SELECT'],
-              };
+   enum   'SQL_Query_Type' => qw(SELECT INSERT UPDATE DELETE);
+   coerce 'SQL_Query_Type' => from 'Str' => via { uc($_) };
 
 
-   for my $name ( keys %$attr ) {
-      my ($type,$default) = ref($attr->{$name}) ? @{$attr->{$name}} : $attr->{$name};
-      my $required = $name =~ s/^!//;
-      my $def = {
-         is        => 'rw',
-         isa       => $type,
-         traits    => [ 'Chained' ],
-         clearer   => qq{clear_$name},
-         predicate => qq{has_$name},
+   use constant QUERY_PARTS => qw{ WHAT 
+                                   FROM
+                                   WHERE
+                                   GROUP
+                                   HAVING
+                                   ORDER
+                                   LIMIT
+                                 };
+
+   has type => 
+      is => 'ro',
+      isa => 'SQL_Query_Type',
+      coerce => 1,
+      required => 1,
+   ;
+
+   for my $part (QUERY_PARTS) {
+      has qq{$part} =>
+         is => 'rw',
+         isa => qq{SQL::Query::Builder::Query::Part},
+         lazy => 1,
+         #auto_deref => 1, 
+         default => sub{
+            my $class = qq{SQL::Query::Builder::Query::Part::$part};
+            eval qq{require $class};
+            $class->new;
+         }, 
+         handles => { # my => there
+                      #qq{read_$part}           => q{output},
+                      #qq{write_$part}          => q{input},
+                      qq{has_query_$part}      => q{has_query},
+                      qq{clear_query_$part}    => q{clear_query},
+                      qq{has_bindvars_$part}   => q{has_bindvars},
+                      qq{clear_bindvars_$part} => q{clear_bindvars},
+                    },
+         predicate => qq{has_$part},
+         clearer => qq{clear_$part},
+      ;
+
+      # because this attr is really an obj, we want to point at the right method based on context
+      # if we are setting a value, then pass it to the objects input method, else call output
+      # this allows this object to look like a simple attr from the API standpoint
+      around $part => sub{
+         my $next = shift;
+         my $self = shift;
+         return @_ ? $self->$next->input(@_) : $self->$next->output;
       };
-      if ( defined $default ) {
-         $def->{default} = ref($default) ? sub{$default} : $default;
-      }
-      $def->{auto_deref} = 1 if $type =~ m/Ref/; # auto_deref if a ref
-      has $name => %$def ;
    }
 
-   # 'coerce' lists => HashRef if we were passed anything
-   around [qw{JOIN WHERE}] => sub{
+   # allow for chaining when setting values;
+   around [QUERY_PARTS] => sub {
       my $next = shift;
       my $self = shift;
-      scalar(@_) ? $self->$next(scalar(@_) > 1 ? {@_} : ref($_[0]) eq 'HASH' ? $_[0] : {$_[0] => undef} ) 
-                 : %{$self->$next}; # deref
+      # DO NOT CHAIN if we are just attempting to access the value of this attr
+      # we 'coerce' here vs building a type as type coerce only takes the first value, we want all input
+      my $rv = $self->$next( scalar(@_) == 0                          ? @_    # this is an accessor, just get value
+                           : scalar(@_) == 1 && ref($_[0]) eq 'ARRAY' ? $_[0] # we were passed an arrayref, store it
+                           :                                            \@_   # 'coerce': ref what was passed 
+                           );
+      return @_ ? $self : defined $rv ? @$rv : undef;
    };
-
-   # 'coerce' lists => ArrayRef if we were passed anything
-   around [qw{WHAT FROM GROUP ORDER}] => sub{
+=pod
+=cut
+=pod
+   # WHERE is really a hash, treat it as such
+   around WHERE => sub{
       my $next = shift;
       my $self = shift;
-      scalar(@_) ? $self->$next(scalar(@_) > 1 ? \@_ : ref($_[0]) eq 'ARRAY' ? $_[0] : [$_[0]] )
-                 : @{$self->$next}; #deref
+      return $self->$next(@_) if @_; # DO NOT MODIFY if we are trying to set a value
+      my %WHERE = $self->$next();
+      DUMP {WHERE => \%WHERE};
+      my @out;
+      # we need to unzip keys and values, but we need them to remain in 'sync' two arrays are used
+      foreach my $key (keys %WHERE) {
+         my $value = $WHERE{$key};
+         push @{$self->bindvars}, $value;
+         push @out, sprintf qq{%s = ?}, $key ;
+      }
+      
+      
+      @out;
    };
-
-   sub build { SQL::Query::Builder::Builder->new(query => shift)->build(@_); }
+=cut
+   sub dbi   { shift }
+   sub build { 
+      my $self = shift;
+      #$self->clear_bindvars; # clear out any old cruft to rebuild again;
       
-      
-      
+      my @query = grep{ defined }
+                    $self->type
+                  , join( ', ', $self->WHAT) || undef 
+                  , map {$_, $self->$_} 
+                    grep{my $has = qq{has_$_};$self->$has}
+                    grep{$_ !~ m/(?:WHAT)/} 
+                    QUERY_PARTS
+                  ;
 
-}
+      DUMP {Q => \@query};
+      return join ' ', @query;
+   }
+   
+   no Mouse::Util::TypeConstraints;
+   no Mouse;
 
-#---------------------------------------------------------------------------
-#  QUERY TYPES
-#---------------------------------------------------------------------------
-sub SELECT {
-   my $q = SQL::Query::Builder::Query->new;
-   $q->WHAT(@_) if @_;
-   return $q;
 };
 
 
-#---------------------------------------------------------------------------
-#  SYNTAX HELPERS
-#---------------------------------------------------------------------------
-sub _particle{ SQL::Query::Builder::Particle->new(op => shift, value => shift) };
-sub gt  ($) {_particle('>' , shift)}
-sub gte ($) {_particle('>=', shift)}
+BEGIN {
+   package SQL::Query::Builder::Query::Select;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query};
 
-sub lt  ($) {_particle('<' , shift)}
-sub lte ($) {_particle('<=', shift)} 
+   has '+type' => default => 'SELECT';
 
-sub _set{ SQL::Query::Builder::Set->new( joiner => shift, value => \@_)}
-sub OR  {_set(OR  => @_)}
-sub AND {_set(AND => @_)}
+};
 
-
-
-1;
-
+   
