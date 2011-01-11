@@ -117,3 +117,14 @@ eq_or_diff
 
 
 
+#---------------------------------------------------------------------------
+#  JOINS
+#---------------------------------------------------------------------------
+TODO: {
+   local $TODO = q{JOINs have not yet been worked out at all};
+eq_or_diff
+   [SELECT->FROM('table T1', JOIN 'table T2' => 'col' )->WHERE('T1.col' => gt 12))->build],
+   [q{SELECT * FROM table T1 JOIN table T2 USING (`col`) WHERE (`col` = ? OR `val` = ?)},[12,15]],
+   q{JOIN USING}
+;
+};

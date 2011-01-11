@@ -15,15 +15,28 @@ our @EXPORT = qw{
 
 sub SELECT { 
    my $q = SQL::Query::Builder::Query::Select->new;
-   #$q->WHAT(@_ ? @_ : '*'); # not given as part of new to trip the build in 'coerce' hook
+   $q->WHAT(@_ ? @_ : '*'); # not given as part of new to trip the build in 'coerce' hook
    return $q;
 }
+
+# TODO !!! we will need to have some syntax to append vs overwrite
+# currently $query = SELECT->FROM('table')->WHERE(...)->LIMIT(1);
+# $query->FROM('other'); # would expect to be FROM('table', 'other') but currently this will just be FROM('other')
+
+
+# TODO There is two diffrent context for sets 
+# col => OR[1,2]         ==> col = 1 OR col = 2
+# OR{col => 1, val => 2} ==> col = 1 OR val = 2
 
 sub AND ($) {}
 sub OR  ($) {}
 sub IN  ($) {}
 sub GT  ($$){}
 sub LT  ($$){}
+
+# TODO ... or should JOIN be an attr so that you can append?
+sub JOIN  ($$){}
+sub LJOIN ($$){}
 
 
 
@@ -47,12 +60,17 @@ BEGIN {
       predicate => qq{has_$_},
    for qw{query bindvars};
 
-   # just some sane defaults
+   # just some sane defaults 
    sub input {shift->query(\@_)} # just toss everything in to query
-   sub output{
+   # NOTE: this will append... we need to work out some syntax to do a clear first if you want to overwrite
+   #sub input {my $self = shift;$self->query([@{$self->query},@_])} # just toss everything in to query
+
+   # we are going to assume that most parts are simple lists
+   sub output {
       my $self = shift;
-      return [$self->query, $self->bindvars];
-   }
+      return '*' unless $self->has_query;
+      return join ', ', @{ $self->query }
+   };
 };
 
 BEGIN {
@@ -60,11 +78,6 @@ BEGIN {
    use Util::Log;
    use Mouse;
    extends qw{SQL::Query::Builder::Query::Part};
-
-   sub output {
-      my $self = shift;
-      return '*' unless $self->has_query;
-      return join ', ', @{ $self->query }};
 };
 
 BEGIN {
@@ -79,6 +92,12 @@ BEGIN {
    use Util::Log;
    use Mouse;
    extends qw{SQL::Query::Builder::Query::Part};
+
+   sub input {
+      my $self = shift;
+      my %IN   = @_;
+      
+   }
 =pod
    # WHERE is really a hash, treat it as such
    around WHERE => sub{
@@ -99,8 +118,13 @@ BEGIN {
       @out;
    };
 =cut
+   sub output {
+      my $self = shift;
+      ( $self->query, $self->bindvars );
+   }
 };
 
+=pod
 BEGIN {
    package SQL::Query::Builder::Query::Part::GROUP;
    use Util::Log;
@@ -121,12 +145,14 @@ BEGIN {
    use Mouse;
    extends qw{SQL::Query::Builder::Query::Part};
 };
-
+=cut
 BEGIN {
    package SQL::Query::Builder::Query::Part::LIMIT;
    use Util::Log;
    use Mouse;
    extends qw{SQL::Query::Builder::Query::Part};
+
+   sub output { shift->query->[0] || 1 };
 };
 
 BEGIN {
@@ -162,8 +188,9 @@ BEGIN {
          isa => qq{SQL::Query::Builder::Query::Part},
          lazy => 1,
          default => sub{
+            #require SQL::Query::Builder::Query::Part;
             my $class = qq{SQL::Query::Builder::Query::Part::$part};
-            eval qq{require $class};
+            eval qq{require $class} or do {$class = q{SQL::Query::Builder::Query::Part};} ;
             $class->new;
          }, 
          handles => { # my => there
@@ -198,10 +225,11 @@ BEGIN {
       my @query = grep{ defined }
                     $self->type
                   , join( ', ', $self->WHAT) || undef 
+                  , FROM => $self->FROM,
+                  , WHERE => [$self->WHERE]->[0]
                   , map {$_, $self->$_} 
                     grep{my $has = qq{has_$_};$self->$has}
-                    grep{$_ !~ m/(?:WHAT)/} 
-                    QUERY_PARTS
+                    qw{ GROUP HAVING ORDER LIMIT }
                   ;
 
       DUMP {Q => \@query};
@@ -224,3 +252,5 @@ BEGIN {
 };
 
    
+1;
+
