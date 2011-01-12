@@ -46,6 +46,22 @@ sub LJOIN ($$){}
 #  OBJECTS
 #---------------------------------------------------------------------------
 BEGIN {
+   package SQL::Query::Builder::Query::Util;
+   use Mouse::Role;
+
+   sub flat {
+      map {
+         ( ref $_ eq 'CODE')  ? flat(&$_) # exec code refs 
+       : ( ref $_ eq 'ARRAY') ? flat(@$_) # unpack arrayrefs
+       : ( ref $_ eq 'HASH')  ? flat(%$_) # unpack hashrefs
+       :                        $_ ;      # other wise just leave it alone
+      } @_;
+   } ## end sub flat
+
+   sub soq { return join( ',', map {'?'} flat(@_) )}    # a string of ?'s to match @_
+};
+
+BEGIN {
    package SQL::Query::Builder::Query::Part;
    use Util::Log;
    use Sub::Identify ':all';
@@ -73,6 +89,34 @@ BEGIN {
    };
 };
 
+
+BEGIN {
+   package SQL::Query::Builder::Query::Part::WHERE;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+   with qw{SQL::Query::Builder::Query::Util};
+
+use Util::Log;
+   sub input {
+      my $self = shift;
+      my %IN   = @_;
+      foreach my $key ( keys %IN ) {
+DUMP {WHERE => {$key => $IN{$key}}};
+
+         $self->bindvars([ @{$self->bindvars}, flat( $IN{$key} ) ]);
+         $self->query([ @{$self->query}, sprintf q{%s = %s}, $key, soq($IN{$key})]);
+      }
+DUMP {map{$_ => $self->$_} qw{query bindvars}};
+   }
+
+   sub output {
+      my $self = shift;
+      join ', ', @{$self->query};
+   }
+};
+
+=pod
 BEGIN {
    package SQL::Query::Builder::Query::Part::WHAT;
    use Util::Log;
@@ -86,45 +130,6 @@ BEGIN {
    use Mouse;
    extends qw{SQL::Query::Builder::Query::Part};
 };
-
-BEGIN {
-   package SQL::Query::Builder::Query::Part::WHERE;
-   use Util::Log;
-   use Mouse;
-   extends qw{SQL::Query::Builder::Query::Part};
-
-   sub input {
-      my $self = shift;
-      my %IN   = @_;
-      
-   }
-=pod
-   # WHERE is really a hash, treat it as such
-   around WHERE => sub{
-      my $next = shift;
-      my $self = shift;
-      return $self->$next(@_) if @_; # DO NOT MODIFY if we are trying to set a value
-      my %WHERE = $self->$next();
-      DUMP {WHERE => \%WHERE};
-      my @out;
-      # we need to unzip keys and values, but we need them to remain in 'sync' two arrays are used
-      foreach my $key (keys %WHERE) {
-         my $value = $WHERE{$key};
-         push @{$self->bindvars}, $value;
-         push @out, sprintf qq{%s = ?}, $key ;
-      }
-      
-      
-      @out;
-   };
-=cut
-   sub output {
-      my $self = shift;
-      ( $self->query, $self->bindvars );
-   }
-};
-
-=pod
 BEGIN {
    package SQL::Query::Builder::Query::Part::GROUP;
    use Util::Log;
@@ -188,10 +193,18 @@ BEGIN {
          isa => qq{SQL::Query::Builder::Query::Part},
          lazy => 1,
          default => sub{
+
+            # TODO: this will have to change when broken to there own files
+            my $out;
+            eval { my $class = qq{SQL::Query::Builder::Query::Part::$part};
+                   $out = $class->new;
+                 } or do { $out = SQL::Query::Builder::Query::Part->new };
+            $out;
+
             #require SQL::Query::Builder::Query::Part;
-            my $class = qq{SQL::Query::Builder::Query::Part::$part};
-            eval qq{require $class} or do {$class = q{SQL::Query::Builder::Query::Part};} ;
-            $class->new;
+            #my $class = qq{SQL::Query::Builder::Query::Part::$part};
+            #eval qq{require $class} or do {$class = q{SQL::Query::Builder::Query::Part};} ;
+            #$class->new;
          }, 
          handles => { # my => there
                       qq{has_query_$part}      => q{has_query},
@@ -217,7 +230,13 @@ BEGIN {
          my $self = shift;
          return @_ ? do{$self->$next->input(@_);$self} : $self->$next->output;
       };
+
    }
+
+   sub _raw {
+      my $self      = shift;
+      [$self->meta->get_method_list];
+   };
 
    sub dbi   { shift }
    sub build { 
@@ -226,14 +245,16 @@ BEGIN {
                     $self->type
                   , join( ', ', $self->WHAT) || undef 
                   , FROM => $self->FROM,
-                  , WHERE => [$self->WHERE]->[0]
+                  , WHERE => $self->WHERE
                   , map {$_, $self->$_} 
                     grep{my $has = qq{has_$_};$self->$has}
                     qw{ GROUP HAVING ORDER LIMIT }
                   ;
+use Util::Log;
+DUMP {RAW => $self->_raw('WHAT')};
 
-      DUMP {Q => \@query};
-      return join ' ', @query;
+      my $q = join ' ', @query;
+      return $q, 
    }
    
    no Mouse::Util::TypeConstraints;
