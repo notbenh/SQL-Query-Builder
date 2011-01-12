@@ -32,15 +32,10 @@ sub AND ($) {}
 sub OR  ($) {}
 sub IN  ($) {}
 
-sub GT  ($) {}
-sub LT  ($) {}
-
-# TODO ... or should JOIN be an attr so that you can append?
-sub JOIN  ($$){}
-sub LJOIN ($$){}
-
-
-
+sub GT  ($) {{'>' =>shift}}
+sub GTE ($) {{'>='=>shift}}
+sub LT  ($) {{'<' =>shift}}
+sub LTE ($) {{'<='=>shift}}
 
 
 #---------------------------------------------------------------------------
@@ -90,6 +85,64 @@ BEGIN {
    };
 };
 
+BEGIN {
+   package SQL::Query::Builder::Query::Part::ValuePair;
+   use Util::Log;
+   use Sub::Identify ':all';
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+   with qw{SQL::Query::Builder::Query::Util};
+
+   has '+query' => 
+      isa => 'HashRef',
+      default => sub{{}},
+   ;
+   has op => 
+      is => 'rw',
+      isa => 'Str', 
+      default => '=',
+   ;
+
+   sub input {
+      my ($self, $key, $value) = @_;
+      if ( ref($value) eq 'HASH' ) {
+         if (scalar( keys %$value ) > 1) {
+            # something like col => { '>=' => 1, '<=' => 5}
+            return map{ SQL::Query::Builder::Query::Part::ValuePair->new->input( $key => {$_ => $value->{$_}} ) } keys %$value;
+         }
+         $self->op( [keys %$value]->[0] );
+         ($value) = values %$value;
+         
+      }
+      $self->query({ $key => soq($value)});
+      $self->bindvars([$value]);
+
+      return $self;
+   }
+
+   sub output {
+      my $self = shift;
+      my $query = sprintf join( ' ', '`%s`', $self->op, '%s'), %{ $self->query };
+      return $query, $self->bindvars;
+   }
+
+   
+
+   
+
+};
+
+BEGIN {
+   package SQL::Query::Builder::Query::Part::Set;
+   use Util::Log;
+   use Sub::Identify ':all';
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+
+   
+
+};
+   
 
 BEGIN {
    package SQL::Query::Builder::Query::Part::WHERE;
@@ -98,17 +151,17 @@ BEGIN {
    extends qw{SQL::Query::Builder::Query::Part};
    with qw{SQL::Query::Builder::Query::Util};
 
-use Util::Log;
+   sub pair ($$) { SQL::Query::Builder::Query::Part::ValuePair->new->input(@_) }
+
    sub input {
       my $self = shift;
       my %IN   = @_;
-      foreach my $key ( keys %IN ) {
-DUMP {WHERE => {$key => $IN{$key}}};
-
-         $self->bindvars([ @{$self->bindvars}, flat( $IN{$key} ) ]);
-         $self->query([ @{$self->query}, sprintf q{`%s` = %s}, $key, soq($IN{$key})]);
+      while (my ($key, $value) = each %IN) {
+         map { my ($q,$bv) = $_->output;
+               $self->query([ @{ $self->query }, $q ]);
+               $self->bindvars([ @{ $self->bindvars }, @$bv ]);
+             } pair $key => $value;
       }
-DUMP {map{$_ => $self->$_} qw{query bindvars}};
    }
 
    sub output {
@@ -174,6 +227,8 @@ BEGIN {
 
    use constant QUERY_PARTS => qw{ WHAT 
                                    FROM
+                                   JOIN 
+                                   LJION
                                    WHERE
                                    GROUP
                                    HAVING
