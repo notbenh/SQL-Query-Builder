@@ -31,8 +31,9 @@ sub SELECT {
 sub AND ($) {}
 sub OR  ($) {}
 sub IN  ($) {}
-sub GT  ($$){}
-sub LT  ($$){}
+
+sub GT  ($) {}
+sub LT  ($) {}
 
 # TODO ... or should JOIN be an attr so that you can append?
 sub JOIN  ($$){}
@@ -105,14 +106,14 @@ use Util::Log;
 DUMP {WHERE => {$key => $IN{$key}}};
 
          $self->bindvars([ @{$self->bindvars}, flat( $IN{$key} ) ]);
-         $self->query([ @{$self->query}, sprintf q{%s = %s}, $key, soq($IN{$key})]);
+         $self->query([ @{$self->query}, sprintf q{`%s` = %s}, $key, soq($IN{$key})]);
       }
 DUMP {map{$_ => $self->$_} qw{query bindvars}};
    }
 
    sub output {
       my $self = shift;
-      join ', ', @{$self->query};
+      return (join( ', ', @{$self->query}), $self->bindvars);
    }
 };
 
@@ -241,20 +242,22 @@ BEGIN {
    sub dbi   { shift }
    sub build { 
       my $self = shift;
+
+      my ($where_query, $bindvars) = $self->WHERE;
       my @query = grep{ defined }
                     $self->type
                   , join( ', ', $self->WHAT) || undef 
                   , FROM => $self->FROM,
-                  , WHERE => $self->WHERE
-                  , map {$_, $self->$_} 
+                  , length($where_query) ? (WHERE => $where_query) : ()
+                  , map { my $disp = $_ eq 'GROUP' ? 'GROUP BY' : $_;
+                          $disp, $self->$_
+                        } 
                     grep{my $has = qq{has_$_};$self->$has}
                     qw{ GROUP HAVING ORDER LIMIT }
                   ;
-use Util::Log;
-DUMP {RAW => $self->_raw('WHAT')};
 
       my $q = join ' ', @query;
-      return $q, 
+      return $q, $bindvars;
    }
    
    no Mouse::Util::TypeConstraints;

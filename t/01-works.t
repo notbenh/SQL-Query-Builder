@@ -35,7 +35,6 @@ eq_or_diff
    q{checking both types of WHAT syntax}
 ;
 
-__END__
 
 #---------------------------------------------------------------------------
 #  WHERE SYNTAX
@@ -60,7 +59,6 @@ eq_or_diff
 };
 
 __END__
-
 eq_or_diff
    [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => {'>' => 12})->build],
    [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => gt 12)->build],
