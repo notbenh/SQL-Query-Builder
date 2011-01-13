@@ -60,7 +60,8 @@ eq_or_diff
    [SELECT->FROM(q{table})->WHERE(col => AND [GT 12, LT 15])->build],
    q{Multiple hash is an implied AND set},
 ;
-__END__
+
+#__END__
 eq_or_diff
    [SELECT->FROM('table')->WHERE(col=>OR[1..3])->build],
    [q{SELECT * FROM table WHERE (`col` = ? OR `col` = ? OR `col` = ?)},[1..3]],
@@ -80,7 +81,7 @@ eq_or_diff
 ;
 };
 
-__END__
+#__END__
 eq_or_diff
    [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => {'>' => 12})->build],
    [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => GT 12)->build],
@@ -90,7 +91,7 @@ eq_or_diff
 
 eq_or_diff
    [SELECT->FROM(q{table})->WHERE(col => {'>' => 12, '<' => 15})->build],
-   [SELECT->FROM(q{table})->WHERE(col => AND(GT 12, LT 15))->build],
+   [SELECT->FROM(q{table})->WHERE(col => AND[GT 12, LT 15])->build],
    q{Multiple hash is an implied AND set},
 ;
 
@@ -128,7 +129,7 @@ eq_or_diff
 TODO: {
    local $TODO = q{sets currently do not yet self unpack, currently sets assume to contain only particles};
 eq_or_diff
-   [SELECT->FROM('table')->WHERE(''=>OR(col => 12, val => 15))->build],
+   [SELECT->FROM('table')->WHERE(''=>OR[col => 12, val => 15])->build],
    [q{SELECT * FROM table WHERE (`col` = ? OR `val` = ?)},[12,15]],
    q{basic OR syntax}
 ;
@@ -143,8 +144,29 @@ eq_or_diff
 TODO: {
    local $TODO = q{JOINs have not yet been worked out at all};
 eq_or_diff
-   [SELECT->FROM('table T1', JOIN 'table T2' => 'col' )->WHERE('T1.col' => GT 12))->build],
+   [SELECT->FROM('table T1', JOIN 'table T2' => 'col' )->WHERE('T1.col' => GT 12)->build],
    [q{SELECT * FROM table T1 JOIN table T2 USING (`col`) WHERE (`col` = ? OR `val` = ?)},[12,15]],
    q{JOIN USING}
 ;
+eq_or_diff
+   [SELECT->FROM('table T1', JOIN 'table T2' => {'T1.col' => 'T2.col'} )->WHERE('T1.col' => GT 12)->build],
+   [q{SELECT * FROM table T1 JOIN table T2 USING (`col`) WHERE (`col` = ? OR `val` = ?)},[12,15]],
+   q{JOIN USING}
+;
+
+};
+
+
+#---------------------------------------------------------------------------
+#  DBI syntax
+#---------------------------------------------------------------------------
+TODO: {
+   local $TODO = q{because build does not work yet in all cases this will not completely work yet};
+
+eq_or_diff
+   [SELECT->FROM('table')->WHERE(col => 13)->dbi(Slice=>{})],
+   [q{SELECT * FROM table WHERE `col` = ?},{Slice=>{}},13],
+   q{yup that looks about right},
+;
+
 };
