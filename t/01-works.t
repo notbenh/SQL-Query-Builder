@@ -25,11 +25,17 @@ isa_ok
    q{[DSL] LJOIN}
 ;
 is LJOIN(table => 'col')->type, 'LEFT', q{[DSL] LJOIN sets type to 'LEFT'};
+isa_ok
+   SELECT->FROM('table'),
+   q{SQL::Query::Builder::Query::Select},
+   q{[DSL] SELECT}
+;
 
 
 #---------------------------------------------------------------------------
 #  BASIC QUERY
 #---------------------------------------------------------------------------
+
 eq_or_diff
    [SELECT->FROM('table')->build],
    [q{SELECT * FROM table},[]],

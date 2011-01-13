@@ -44,8 +44,8 @@ sub GTE ($) {{'>='=>shift}}
 sub LT  ($) {{'<' =>shift}}
 sub LTE ($) {{'<='=>shift}}
 
-sub JOIN ($$) { my $j = SQL::Query::Builder::Query::Part::JOIN->new; $j->input(\@_); $j}
-sub LJOIN($$) { my $j = SQL::Query::Builder::Query::Part::JOIN->new(type => 'LEFT'); $j->input(\@_); $j}
+sub JOIN ($$) { my $j = SQL::Query::Builder::Query::Part::JOIN->new; $j->data(\@_); $j}
+sub LJOIN($$) { my $j = SQL::Query::Builder::Query::Part::JOIN->new(type => 'LEFT'); $j->data(\@_); $j}
 
 
 #---------------------------------------------------------------------------
@@ -54,6 +54,12 @@ sub LJOIN($$) { my $j = SQL::Query::Builder::Query::Part::JOIN->new(type => 'LEF
 BEGIN {
    package SQL::Query::Builder::Query::Part;
    use Mouse;
+   use Scalar::Util qw{blessed};
+
+   has type => 
+      is => 'ro',
+      isa => 'Maybe[Str]',
+   ;
 
    has data => 
       is => 'rw',
@@ -62,10 +68,23 @@ BEGIN {
       default => sub{[]},
       clearer => qq{clear_data},
       predicate => qq{has_data},
-      writer => 'input',
-      reader => 'output',
    ;
 
+   # build returns a partial query string and an arrayref of bind vars
+   sub build { 
+      my $self = shift;
+      return undef, [] unless $self->has_data;
+      my @q;
+      my @bv;
+      foreach my $item (@{ $self->data }) {
+         my ($q,$bv) = blessed($item) && $item->can('build') ? $item->build : $item;
+         push @q, $q;
+         push @bv, @{ $bv || [] };
+      }
+
+      return join( ', ', grep{defined} @q), \@bv;
+      
+   }
 }
 
 BEGIN {
@@ -86,6 +105,20 @@ BEGIN {
       default => '',
    ;
 
+   # TODO due to part's default join ', ' we are ending up with "FROM table, JOIN table" => bad
+
+   sub build {
+      my $self = shift;
+      my $q = sprintf q{%sJOIN %s %s}, 
+                      length($self->type) ? $self->type . ' ' : ''
+                    , $self->data->[0]
+                    , ref($self->data->[1]) eq 'HASH' ? 'ON COMPLEX'
+                                                      : sprintf( q{USING (%s)}, $self->data->[1])
+      ;
+      return $q, [];
+   }
+              
+
 }
 
 
@@ -93,6 +126,12 @@ BEGIN {
    package SQL::Query::Builder::Query;
    use Mouse;
 
+   has type => 
+      is => 'ro',
+      isa => 'Str',
+   ;
+
+   # TODO there should be some way to altering this list from the outside for other query types
    use constant QUERY_PARTS => qw{WHAT FROM WHERE HAVING GROUP ORDER LIMIT};
 
    for my $part (QUERY_PARTS) {
@@ -102,12 +141,16 @@ BEGIN {
          lazy => 1,
          default => sub{
             my $out;
+
+            my $part_type = $part eq 'GROUP' ? 'GROUP BY'
+                          : $part eq 'WHAT'  ? undef
+                          :                    $part;
             eval { 
                my $class = qq{SQL::Query::Builder::Query::Part::$part};
-               $out = $class->new;
+               $out = $class->new( type => $part_type );
             } or do {
                #warn "ERROR: $@";
-               $out = SQL::Query::Builder::Query::Part->new;
+               $out = SQL::Query::Builder::Query::Part->new( type => $part_type );
             };
             $out;
          },
@@ -119,8 +162,8 @@ BEGIN {
    around [QUERY_PARTS] => sub{
       my $next = shift;
       my $self = shift;
-      my $rv = $self->$next->input(\@_);
-      return @_ ? $self : $rv; # return self if in 'setter' mode, allows for chains
+      # return self if in 'setter' mode to allow for chainging
+      return @_ ? do{$self->$next->data(\@_);$self} : $self->$next;
    };
 
 
@@ -131,7 +174,22 @@ BEGIN {
       return ($q,$argv,@{ $bind || [] });
    }
 
-   sub build { shift }; # for now return self
+   sub build { 
+      my $self = shift;
+      my @q;
+      my @bv;
+      foreach my $part (QUERY_PARTS) {
+         my $predicate = qq{has_$part};
+         next unless $self->$predicate;
+         
+         my ($q,$bv) = $self->$part->build;
+         push @q, $self->$part->type, $q;
+         push @bv, @$bv;
+      }
+
+      return join( ' ', $self->type, grep{defined} @q), \@bv;
+      
+   }
       
 };
 
@@ -139,5 +197,7 @@ BEGIN {
    package SQL::Query::Builder::Query::Select;
    use Mouse;
    extends qw{SQL::Query::Builder::Query};
+
+   has '+type' => default => 'SELECT';
 };
 
