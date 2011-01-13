@@ -28,7 +28,9 @@ sub SELECT {
 # col => OR[1,2]         ==> col = 1 OR col = 2
 # OR{col => 1, val => 2} ==> col = 1 OR val = 2
 
-sub AND ($) {}
+sub AND ($) { 
+   
+}
 sub OR  ($) {}
 sub IN  ($) {}
 

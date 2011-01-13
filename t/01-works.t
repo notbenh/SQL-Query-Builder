@@ -61,7 +61,7 @@ eq_or_diff
    [SELECT->FROM(q{table})->WHERE(col => AND [GT 12, LT 15])->build],
    q{Multiple hash is an implied AND set},
 ;
-
+__END__
 eq_or_diff
    [SELECT->FROM('table')->WHERE(col=>OR[1..3])->build],
    [q{SELECT * FROM table WHERE (`col` = ? OR `col` = ? OR `col` = ?)},[1..3]],
