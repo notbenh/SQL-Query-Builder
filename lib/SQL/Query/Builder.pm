@@ -44,32 +44,82 @@ sub GTE ($) {{'>='=>shift}}
 sub LT  ($) {{'<' =>shift}}
 sub LTE ($) {{'<='=>shift}}
 
-sub JOIN ($$) {}
-sub LJOIN($$) {}
+sub JOIN ($$) { my $j = SQL::Query::Builder::Query::Part::JOIN->new; $j->input(\@_); $j}
+sub LJOIN($$) { my $j = SQL::Query::Builder::Query::Part::JOIN->new(type => 'LEFT'); $j->input(\@_); $j}
 
 
 #---------------------------------------------------------------------------
 #  Query
 #---------------------------------------------------------------------------
 BEGIN {
+   package SQL::Query::Builder::Query::Part;
+   use Mouse;
+
+   has data => 
+      is => 'rw',
+      isa => 'ArrayRef',
+      lazy => 1,
+      default => sub{[]},
+      clearer => qq{clear_data},
+      predicate => qq{has_data},
+      writer => 'input',
+      reader => 'output',
+   ;
+
+}
+
+BEGIN {
+   package SQL::Query::Builder::Query::Part::WHERE;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+
+}
+
+BEGIN {
+   package SQL::Query::Builder::Query::Part::JOIN;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+
+   has type => 
+      is => 'ro', 
+      isa => 'Str',
+      default => '',
+   ;
+
+}
+
+
+BEGIN {
    package SQL::Query::Builder::Query;
    use Mouse;
 
    use constant QUERY_PARTS => qw{WHAT FROM WHERE HAVING GROUP ORDER LIMIT};
 
-   has $_ => 
-      is => 'rw',
-      isa => 'ArrayRef',
-      lazy => 1,
-      default => sub{[]},
-      clearer => qq{clear_$_},
-      predicate => qq{has_$_},
-   for QUERY_PARTS;
+   for my $part (QUERY_PARTS) {
+      has $part => 
+         is => 'rw',
+         isa => 'SQL::Query::Builder::Query::Part',
+         lazy => 1,
+         default => sub{
+            my $out;
+            eval { 
+               my $class = qq{SQL::Query::Builder::Query::Part::$part};
+               $out = $class->new;
+            } or do {
+               #warn "ERROR: $@";
+               $out = SQL::Query::Builder::Query::Part->new;
+            };
+            $out;
+         },
+         clearer => qq{clear_$part},
+         predicate => qq{has_$part},
+      ;
+   }
 
    around [QUERY_PARTS] => sub{
       my $next = shift;
       my $self = shift;
-      my $rv = $self->$next(\@_);
+      my $rv = $self->$next->input(\@_);
       return @_ ? $self : $rv; # return self if in 'setter' mode, allows for chains
    };
 

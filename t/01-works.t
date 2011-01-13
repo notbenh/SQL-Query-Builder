@@ -10,8 +10,25 @@ use Util::Log;
 
 BEGIN { print qq{\n} for 1..10};
 
+
 #---------------------------------------------------------------------------
-#  BASICS
+#  DLS
+#---------------------------------------------------------------------------
+isa_ok
+   JOIN(table => 'col'),
+   q{SQL::Query::Builder::Query::Part::JOIN},
+   q{[DSL] JOIN}
+;
+isa_ok
+   LJOIN(table => 'col'),
+   q{SQL::Query::Builder::Query::Part::JOIN},
+   q{[DSL] LJOIN}
+;
+is LJOIN(table => 'col')->type, 'LEFT', q{[DSL] LJOIN sets type to 'LEFT'};
+
+
+#---------------------------------------------------------------------------
+#  BASIC QUERY
 #---------------------------------------------------------------------------
 eq_or_diff
    [SELECT->FROM('table')->build],
@@ -149,7 +166,7 @@ eq_or_diff
    q{JOIN USING}
 ;
 eq_or_diff
-   [SELECT->FROM('table T1', JOIN 'table T2' => {'T1.col' => 'T2.col'} )->WHERE('T1.col' => GT 12)->build],
+   [SELECT->FROM('table T1', LJOIN 'table T2' => {'T1.col' => 'T2.col'} )->WHERE('T1.col' => GT 12)->build],
    [q{SELECT * FROM table T1 JOIN table T2 USING (`col`) WHERE (`col` = ? OR `val` = ?)},[12,15]],
    q{JOIN USING}
 ;
