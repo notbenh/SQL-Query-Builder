@@ -1,0 +1,168 @@
+=pod
+BEGIN {
+   package SQL::Query::Builder::Query::Part::WHAT;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
+
+BEGIN {
+   package SQL::Query::Builder::Query::Part::FROM;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
+BEGIN {
+   package SQL::Query::Builder::Query::Part::GROUP;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
+
+BEGIN {
+   package SQL::Query::Builder::Query::Part::HAVING;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
+
+BEGIN {
+   package SQL::Query::Builder::Query::Part::ORDER;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
+=cut
+BEGIN {
+   package SQL::Query::Builder::Query::Part::LIMIT;
+BEGIN {
+  $SQL::Query::Builder::Query::Part::LIMIT::VERSION = '0.001_01';
+}
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+
+   sub output { shift->query->[0] || 1 };
+};
+
+BEGIN {
+   package SQL::Query::Builder::Query;
+BEGIN {
+  $SQL::Query::Builder::Query::VERSION = '0.001_01';
+}
+   use Util::Log;
+   use Sub::Identify ':all';
+   use Mouse;
+   with qw{SQL::Query::Builder::Query::Types};
+
+   use constant QUERY_PARTS => qw{ WHAT 
+                                   FROM
+                                   JOIN 
+                                   LJION
+                                   WHERE
+                                   GROUP
+                                   HAVING
+                                   ORDER
+                                   LIMIT
+                                 };
+
+   has type => 
+      is => 'ro',
+      isa => 'SQL_Query_Type',
+      coerce => 1,
+      required => 1,
+   ;
+
+   for my $part (QUERY_PARTS) {
+      has qq{$part} =>
+         is => 'rw',
+         isa => qq{SQL::Query::Builder::Query::Part},
+         lazy => 1,
+         default => sub{
+
+            # TODO: this will have to change when broken to there own files
+            my $out;
+            eval { my $class = qq{SQL::Query::Builder::Query::Part::$part};
+                   $out = $class->new;
+                 } or do { $out = SQL::Query::Builder::Query::Part->new };
+            $out;
+
+            #require SQL::Query::Builder::Query::Part;
+            #my $class = qq{SQL::Query::Builder::Query::Part::$part};
+            #eval qq{require $class} or do {$class = q{SQL::Query::Builder::Query::Part};} ;
+            #$class->new;
+         }, 
+         handles => { # my => there
+                      qq{has_query_$part}      => q{has_query},
+                      qq{clear_query_$part}    => q{clear_query},
+                      qq{has_bindvars_$part}   => q{has_bindvars},
+                      qq{clear_bindvars_$part} => q{clear_bindvars},
+                    },
+         predicate => qq{has_$part},
+         clearer => qq{clear_$part},
+      ;
+   
+      # I want to keep the 'moose' API where you have one method that deligates to 
+      # get or set the value, though this attr is an object. I don't want to reset
+      # the object, I want to set values in the object. Though 'has' builds us our
+      # the method to access the object, but it's going to point to the wrong place.
+      # This modifier corrects this so we can still call 'WHAT' but it pushes the 
+      # data passed to WHAT->input(@_) and input will do 'the right thing' from there.
+
+      # Also while we are looping, I want to be able to chain these methods if they 
+      # are called in 'setter' mode. Note the 'do' block returns $self.
+      around $part => sub{
+         my $next = shift;
+         my $self = shift;
+         return @_ ? do{$self->$next->input(@_);$self} : $self->$next->output;
+      };
+
+   }
+
+   sub _raw {
+      my $self      = shift;
+      [$self->meta->get_method_list];
+   };
+
+   sub dbi   { shift }
+   sub build { 
+      my $self = shift;
+
+      my ($where_query, $bindvars) = $self->WHERE;
+      my @query = grep{ defined }
+                    $self->type
+                  , join( ', ', $self->WHAT) || undef 
+                  , FROM => $self->FROM,
+                  , length($where_query) ? (WHERE => $where_query) : ()
+                  , map { my $disp = $_ eq 'GROUP' ? 'GROUP BY' : $_;
+                          $disp, $self->$_
+                        } 
+                    grep{my $has = qq{has_$_};$self->$has}
+                    qw{ GROUP HAVING ORDER LIMIT }
+                  ;
+
+      my $q = join ' ', @query;
+      return $q, $bindvars;
+   }
+   
+   no Mouse::Util::TypeConstraints;
+   no Mouse;
+
+};
+
+
+BEGIN {
+   package SQL::Query::Builder::Query::Select;
+BEGIN {
+  $SQL::Query::Builder::Query::Select::VERSION = '0.001_01';
+}
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query};
+
+   has '+type' => default => 'SELECT';
+
+};
+
+   
+1;
+

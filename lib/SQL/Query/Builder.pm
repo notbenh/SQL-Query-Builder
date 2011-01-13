@@ -13,6 +13,8 @@ our @EXPORT = qw{
    GT
 };
 
+# ABSTRACT: a completely OO driven way to build SQL queries.
+
 sub SELECT { 
    my $q = SQL::Query::Builder::Query::Select->new;
    $q->WHAT(@_ ? @_ : '*'); # not given as part of new to trip the build in 'coerce' hook

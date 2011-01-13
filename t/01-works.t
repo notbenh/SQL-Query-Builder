@@ -55,7 +55,7 @@ eq_or_diff
    [q{SELECT * FROM table WHERE (`col` > ? AND `col` < ?)},[12, 15]],
    q{GT expands correctly},
 ;
-
+__END__
 eq_or_diff
    [SELECT->FROM(q{table})->WHERE(col => {'>' => 12, '<' => 15})->build],
    [SELECT->FROM(q{table})->WHERE(col => AND [GT 12, LT 15])->build],
