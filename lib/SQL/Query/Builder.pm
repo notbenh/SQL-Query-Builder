@@ -107,12 +107,21 @@ BEGIN {
 
    # TODO due to part's default join ', ' we are ending up with "FROM table, JOIN table" => bad
 
+   # TODO the JOIN table => {} notation should hand that hash to WHERE
+
    sub build {
       my $self = shift;
       my $q = sprintf q{%sJOIN %s %s}, 
                       length($self->type) ? $self->type . ' ' : ''
                     , $self->data->[0]
-                    , ref($self->data->[1]) eq 'HASH' ? 'ON COMPLEX'
+                    , ref($self->data->[1]) eq 'HASH' ? do{ # TODO this really should be a handoff to WHERE->
+                                                            my $hash = $self->data->[1];
+                                                            my @out;
+                                                            while (my ($k,$v) = map{s/[.]/`.`/g;$_} each %$hash) {
+                                                               push @out, qq{`$k` = `$v`};
+                                                            }
+                                                            sprintf q{ON (%s)}, join ' AND ', @out;
+                                                          }
                                                       : sprintf( q{USING (%s)}, $self->data->[1])
       ;
       return $q, [];

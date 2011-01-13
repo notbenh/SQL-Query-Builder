@@ -172,7 +172,7 @@ eq_or_diff
    q{JOIN USING}
 ;
 eq_or_diff
-   [SELECT->FROM('table T1', LJOIN 'table T2' => {'T1.col' => 'T2.col'} )->WHERE('T1.col' => GT 12)->build],
+   [SELECT->FROM('table T1', LJOIN 'table T2' => {'T1.col' => 'T2.col', 'T1.val', 'kitten'} )->WHERE('T1.col' => GT 12)->build],
    [q{SELECT * FROM table T1 JOIN table T2 USING (`col`) WHERE (`col` = ? OR `val` = ?)},[12,15]],
    q{JOIN USING}
 ;
