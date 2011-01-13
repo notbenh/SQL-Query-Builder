@@ -58,6 +58,32 @@ BEGIN {
 };
 
 BEGIN {
+   package SQL::Query::Builder::Query::Types;
+   use Mouse::Role;
+   use Mouse::Util::TypeConstraints;
+
+   enum   'SQL_Query_Type' => qw{SELECT INSERT UPDATE DELETE};
+   coerce 'SQL_Query_Type' => from 'Str' => via { uc($_) };
+
+   enum   'SQL_Set_Type' => qw{IN OR AND};
+   coerce 'SQL_Set_Type' => from 'Str' => via { uc($_) };
+
+   no Mouse::Util::TypeConstraints;
+};
+BEGIN {
+   package SQL::Query::Builder::Query::Part::Util::InputReturnSelf;
+   use Mouse::Role;
+
+   around input => sub{
+      my $next = shift;
+      my $self = shift;
+      $self->$next(@_);
+      $self;
+   };
+};
+
+
+BEGIN {
    package SQL::Query::Builder::Query::Part;
    use Util::Log;
    use Sub::Identify ':all';
@@ -91,7 +117,10 @@ BEGIN {
    use Sub::Identify ':all';
    use Mouse;
    extends qw{SQL::Query::Builder::Query::Part};
-   with qw{SQL::Query::Builder::Query::Util};
+   with qw{
+      SQL::Query::Builder::Query::Util
+   };
+      #SQL::Query::Builder::Query::Part::Util::InputReturnSelf
 
    has '+query' => 
       isa => 'HashRef',
@@ -108,7 +137,11 @@ BEGIN {
       if ( ref($value) eq 'HASH' ) {
          if (scalar( keys %$value ) > 1) {
             # something like col => { '>=' => 1, '<=' => 5}
-            return map{ SQL::Query::Builder::Query::Part::ValuePair->new->input( $key => {$_ => $value->{$_}} ) } keys %$value;
+            my $set = SQL::Query::Builder::Query::Part::Set->new;
+            $set->input( map{ SQL::Query::Builder::Query::Part::ValuePair->new->input( $key => {$_ => $value->{$_}} ) 
+                            } keys %$value
+                       );
+            return $set;
          }
          $self->op( [keys %$value]->[0] );
          ($value) = values %$value;
@@ -121,8 +154,8 @@ BEGIN {
    }
 
    sub output {
-      my $self = shift;
-      my $query = sprintf join( ' ', '`%s`', $self->op, '%s'), %{ $self->query };
+      my $self   = shift;
+      my $query  = sprintf join( ' ', '`%s`', $self->op, '%s'), [keys %{ $self->query }]->[0], [values %{ $self->query}]->[0] || 'NULL';
       return $query, $self->bindvars;
    }
 
@@ -134,13 +167,43 @@ BEGIN {
 
 BEGIN {
    package SQL::Query::Builder::Query::Part::Set;
-   use Util::Log;
    use Sub::Identify ':all';
    use Mouse;
    extends qw{SQL::Query::Builder::Query::Part};
+   with qw{
+      SQL::Query::Builder::Query::Types
+      SQL::Query::Builder::Query::Part::Util::InputReturnSelf
+   };
 
-   
+   # TODO: this really should be it's own object not an extention of PART
+   #       mostly because it should only have one arrayref of 'DATA' that
+   #       contains ValuePairs, not query/bindvars
 
+   has type => 
+      is => 'rw',
+      isa => 'SQL_Set_Type',
+      default => 'AND',
+   ;
+
+   sub input {
+      my $self = shift;
+      my @q;
+      my @bv;
+      foreach my $pair (@_) {
+         my ($q,$bv) = $pair->output;
+         push @q, $q;
+         push @bv, @$bv;
+      }
+      $self->query(\@q);
+      $self->bindvars(\@bv);
+   }
+
+   sub output {
+      my $self = shift;
+      my $q = sprintf( q{(%s)}, join sprintf( q{ %s }, $self->type), @{ $self->query });
+      return $q , $self->bindvars;
+
+   }
 };
    
 
@@ -157,7 +220,8 @@ BEGIN {
       my $self = shift;
       my %IN   = @_;
       while (my ($key, $value) = each %IN) {
-         map { my ($q,$bv) = $_->output;
+         map { #DUMP {WHERE => $_};
+               my ($q,$bv) = $_->output;
                $self->query([ @{ $self->query }, $q ]);
                $self->bindvars([ @{ $self->bindvars }, @$bv ]);
              } pair $key => $value;
@@ -219,11 +283,7 @@ BEGIN {
    use Util::Log;
    use Sub::Identify ':all';
    use Mouse;
-   use Mouse::Util::TypeConstraints;
-
-   enum   'SQL_Query_Type' => qw(SELECT INSERT UPDATE DELETE);
-   coerce 'SQL_Query_Type' => from 'Str' => via { uc($_) };
-
+   with qw{SQL::Query::Builder::Query::Types};
 
    use constant QUERY_PARTS => qw{ WHAT 
                                    FROM
