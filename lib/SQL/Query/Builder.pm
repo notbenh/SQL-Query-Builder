@@ -52,6 +52,17 @@ sub LJOIN($$) { my $j = SQL::Query::Builder::Query::Part::JOIN->new(type => 'LEF
 #  Query
 #---------------------------------------------------------------------------
 BEGIN {
+   package SQL::Query::Builder::Query::Util;
+   use Mouse::Role;
+
+   sub back_tick ($) {
+      my $_ = shift;
+      s/[.]/`.`/g;
+      qq{`$_`};
+   }
+};
+
+BEGIN {
    package SQL::Query::Builder::Query::Part;
    use Mouse;
    use Scalar::Util qw{blessed};
@@ -98,6 +109,7 @@ BEGIN {
    package SQL::Query::Builder::Query::Part::JOIN;
    use Mouse;
    extends qw{SQL::Query::Builder::Query::Part};
+   with qw{SQL::Query::Builder::Query::Util};
 
    has type => 
       is => 'ro', 
@@ -117,12 +129,12 @@ BEGIN {
                     , ref($self->data->[1]) eq 'HASH' ? do{ # TODO this really should be a handoff to WHERE->
                                                             my $hash = $self->data->[1];
                                                             my @out;
-                                                            while (my ($k,$v) = map{s/[.]/`.`/g;$_} each %$hash) {
-                                                               push @out, qq{`$k` = `$v`};
+                                                            while (my ($k,$v) = map{back_tick $_} each %$hash) {
+                                                               push @out, qq{$k = $v};
                                                             }
                                                             sprintf q{ON (%s)}, join ' AND ', @out;
                                                           }
-                                                      : sprintf( q{USING (%s)}, $self->data->[1])
+                                                      : sprintf( q{USING (%s)}, back_tick $self->data->[1])
       ;
       return $q, [];
    }
