@@ -31,7 +31,7 @@ sub SELECT {
 # OR{col => 1, val => 2} ==> col = 1 OR val = 2
 
 sub AND ($) { 
-   
+   SQL::Query::Builder::Query::Part::Set->new->input(shift);
 }
 sub OR  ($) {}
 sub IN  ($) {}
@@ -194,6 +194,8 @@ BEGIN {
       my @q;
       my @bv;
       foreach my $pair (@_) {
+use Util::Log;
+DUMP {SET_INPUT => $pair};
          my ($q,$bv) = $pair->output;
          push @q, $q;
          push @bv, @$bv;
@@ -222,6 +224,7 @@ BEGIN {
 
    sub input {
       my $self = shift;
+DUMP {WHERE_IN => \@_} if scalar(@_) % 2;
       my %IN   = @_;
       while (my ($key, $value) = each %IN) {
          map { #DUMP {WHERE => $_};
@@ -238,41 +241,6 @@ BEGIN {
    }
 };
 
-=pod
-BEGIN {
-   package SQL::Query::Builder::Query::Part::WHAT;
-   use Util::Log;
-   use Mouse;
-   extends qw{SQL::Query::Builder::Query::Part};
-};
-
-BEGIN {
-   package SQL::Query::Builder::Query::Part::FROM;
-   use Util::Log;
-   use Mouse;
-   extends qw{SQL::Query::Builder::Query::Part};
-};
-BEGIN {
-   package SQL::Query::Builder::Query::Part::GROUP;
-   use Util::Log;
-   use Mouse;
-   extends qw{SQL::Query::Builder::Query::Part};
-};
-
-BEGIN {
-   package SQL::Query::Builder::Query::Part::HAVING;
-   use Util::Log;
-   use Mouse;
-   extends qw{SQL::Query::Builder::Query::Part};
-};
-
-BEGIN {
-   package SQL::Query::Builder::Query::Part::ORDER;
-   use Util::Log;
-   use Mouse;
-   extends qw{SQL::Query::Builder::Query::Part};
-};
-=cut
 BEGIN {
    package SQL::Query::Builder::Query::Part::LIMIT;
    use Util::Log;
@@ -396,4 +364,39 @@ BEGIN {
 
    
 1;
+
+__END__
+BEGIN {
+   package SQL::Query::Builder::Query::Part::WHAT;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
+
+BEGIN {
+   package SQL::Query::Builder::Query::Part::FROM;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
+BEGIN {
+   package SQL::Query::Builder::Query::Part::GROUP;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
+
+BEGIN {
+   package SQL::Query::Builder::Query::Part::HAVING;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
+
+BEGIN {
+   package SQL::Query::Builder::Query::Part::ORDER;
+   use Util::Log;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+};
 
