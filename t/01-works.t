@@ -62,23 +62,28 @@ eq_or_diff
 #---------------------------------------------------------------------------
 #  WHERE SYNTAX
 #---------------------------------------------------------------------------
+=cut
 eq_or_diff
    [SELECT->FROM(qw{table})->WHERE(col => GT 12)->build],
-   [q{SELECT * FROM table WHERE `col` > ?},[12]],
+   [q{SELECT * FROM table WHERE (`col` > ?)},[12]],
    q{GT expands correctly},
 ;
+eq_or_diff
+   [SELECT->FROM(qw{table})->WHERE(col => GTE 12, col => LTE 15)->build],
+   [q{SELECT * FROM table WHERE (`col` > ? AND `col` < ?)},[12, 15]],
+   q{GT expands correctly},
+;
+__END__
 eq_or_diff
    [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => {'>' => 12})->build],
    [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => GT 12)->build],
    q{do particles work the same as the old hash syntax},
 ;
-=cut
 eq_or_diff
    [SELECT->FROM(qw{table})->WHERE(col => { '>' => 12, '<' => 15} )->build],
    [q{SELECT * FROM table WHERE (`col` > ? AND `col` < ?)},[12, 15]],
-   q{GT expands correctly},
+   q{old {} => AND notation still works},
 ;
-__END__
 eq_or_diff
    [SELECT->FROM(q{table})->WHERE(col => {'>' => 12, '<' => 15})->build],
    [SELECT->FROM(q{table})->WHERE(col => AND [GT 12, LT 15])->build],
