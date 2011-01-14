@@ -65,12 +65,12 @@ eq_or_diff
 =cut
 eq_or_diff
    [SELECT->FROM(qw{table})->WHERE(col => GT 12)->build],
-   [q{SELECT * FROM table WHERE (`col` > ?)},[12]],
+   [q{SELECT * FROM table WHERE `col` > ?},[12]],
    q{GT expands correctly},
 ;
 eq_or_diff
    [SELECT->FROM(qw{table})->WHERE(col => GTE 12, col => LTE 15)->build],
-   [q{SELECT * FROM table WHERE (`col` > ? AND `col` < ?)},[12, 15]],
+   [q{SELECT * FROM table WHERE (`col` >= ? AND `col` <= ?)},[12, 15]],
    q{GT expands correctly},
 ;
 __END__

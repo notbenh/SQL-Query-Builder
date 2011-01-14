@@ -39,12 +39,10 @@ sub AND ($) { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'AND')
 sub OR  ($) { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'OR' ); $s->data(@_); $s}
 sub IN  ($) { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'IN' ); $s->data(@_); $s}
 
-sub GT  ($) { my $p = SQL::Query::Builder::Query::Part::OpValuePair->new(type => '>'); $p->data(\@_); $p}
-
-#sub GT  ($) {{'>' =>shift}}
-sub GTE ($) {{'>='=>shift}}
-sub LT  ($) {{'<' =>shift}}
-sub LTE ($) {{'<='=>shift}}
+sub GT  ($) { my $p = SQL::Query::Builder::Query::Part::OpValuePair->new(type => '>');  $p->data(\@_); $p}
+sub GTE ($) { my $p = SQL::Query::Builder::Query::Part::OpValuePair->new(type => '>='); $p->data(\@_); $p}
+sub LT  ($) { my $p = SQL::Query::Builder::Query::Part::OpValuePair->new(type => '<');  $p->data(\@_); $p}
+sub LTE ($) { my $p = SQL::Query::Builder::Query::Part::OpValuePair->new(type => '<='); $p->data(\@_); $p}
 
 sub JOIN ($$) { my $j = SQL::Query::Builder::Query::Part::JOIN->new; $j->data(\@_); $j}
 sub LJOIN($$) { my $j = SQL::Query::Builder::Query::Part::JOIN->new(type => 'LEFT'); $j->data(\@_); $j}
@@ -152,7 +150,8 @@ BEGIN {
       $self->joiner( sprintf q{ %s }, $self->type ) unless $self->type eq 'IN';
    }
 
-   before build => sub{
+   around build => sub{
+      my $next = shift;
       my $self = shift;
       $self->data([ map{ my $item = $_; 
                          ref($item) eq 'HASH' ? do{ map { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'AND', column => $_ );
@@ -163,22 +162,34 @@ BEGIN {
                                               : $item;
                        } @{ $self->data }
                  ]);
-use Util::Log;
-DUMP $self->data;
+
+      my ($q,$bv) = $self->$next(@_); 
+      my $format = scalar(@{ $self->data }) > 1 ? q{(%s)} : q{%s};
+      return sprintf( $format, defined $self->column ? join( ' ', back_tick($self->column), $q) : $q )
+           , $bv;
    };
+
 
 }
 
 BEGIN {
    package SQL::Query::Builder::Query::Part::WHERE;
    use Mouse;
+   use List::MoreUtils qw{natatime};
    extends qw{SQL::Query::Builder::Query::Part};
    with qw{SQL::Query::Builder::Query::Util};
 
    sub build {
       my $self = shift;
       my $set  = SQL::Query::Builder::Query::Part::Set->new( type => 'AND' );
-      $set->data([{ @{ $self->data } }]); # store our ArrayRef data as a HashRef set as we expected the user to supply col names
+
+      my $pair = natatime 2, @{$self->data};
+      my @subparts;
+      while (my @vals = $pair->()) {
+         my ($col, $val) = @vals;
+         push @subparts, SQL::Query::Builder::Query::Part::Set->new( type => 'AND', column=> $col, data => [$val] );
+      }
+      $set->data(\@subparts);
       $set->build;
    }
 
