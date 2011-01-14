@@ -39,7 +39,9 @@ sub AND ($) { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'AND')
 sub OR  ($) { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'OR' ); $s->data(@_); $s}
 sub IN  ($) { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'IN' ); $s->data(@_); $s}
 
-sub GT  ($) {{'>' =>shift}}
+sub GT  ($) { my $p = SQL::Query::Builder::Query::Part::OpValuePair->new(type => '>'); $p->data(\@_); $p}
+
+#sub GT  ($) {{'>' =>shift}}
 sub GTE ($) {{'>='=>shift}}
 sub LT  ($) {{'<' =>shift}}
 sub LTE ($) {{'<='=>shift}}
@@ -60,6 +62,19 @@ BEGIN {
       $item =~ s/[.]/`.`/g;
       return qq{`$item`};
    }
+
+   sub flat {
+      map { ( ref $_ eq 'ARRAY') ? flat(@$_) #unpack arrayrefs
+          : ( ref $_ eq 'HASH')  ? flat(%$_) #unpack hashrefs
+          :                        $_ ;      #other wise just leave it alone
+          } @_;
+   } 
+
+   # a string of ?'s to match @_
+   sub soq {
+      join( ',', map {'?'} flat(@_) );
+   }
+
 };
 
 BEGIN {
@@ -105,6 +120,22 @@ BEGIN {
 }
 
 BEGIN {
+   package SQL::Query::Builder::Query::Part::OpValuePair;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+   with qw{SQL::Query::Builder::Query::Util};
+
+   has '+joiner' => default => ' ';
+
+   sub build {
+      my $self = shift;
+      my $q = join $self->joiner, $self->type, soq( $self->data );
+      return $q, $self->data;
+   }
+};
+   
+
+BEGIN {
    package SQL::Query::Builder::Query::Part::Set;
    use Mouse;
    extends qw{SQL::Query::Builder::Query::Part};
@@ -132,8 +163,8 @@ BEGIN {
                                               : $item;
                        } @{ $self->data }
                  ]);
-#use Util::Log;
-#DUMP $self->data;
+use Util::Log;
+DUMP $self->data;
    };
 
 }
