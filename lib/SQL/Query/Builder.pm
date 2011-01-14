@@ -35,17 +35,17 @@ sub SELECT {
 # col => OR[1,2]         ==> col = 1 OR col = 2
 # OR{col => 1, val => 2} ==> col = 1 OR val = 2
 
-sub AND ($) { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'AND'); $s->data(@_); $s}
-sub OR  ($) { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'OR' ); $s->data(@_); $s}
-sub IN  ($) { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'IN' ); $s->data(@_); $s}
+sub AND ($) { SQL::Query::Builder::Query::Part::Set->new( type => 'AND', data => $_[0]); }
+sub OR  ($) { SQL::Query::Builder::Query::Part::Set->new( type => 'OR' , data => $_[0]); }
+sub IN  ($) { SQL::Query::Builder::Query::Part::Set->new( type => 'IN' , data => $_[0]); }
 
-sub GT  ($) { my $p = SQL::Query::Builder::Query::Part::OpValuePair->new(type => '>');  $p->data(\@_); $p}
-sub GTE ($) { my $p = SQL::Query::Builder::Query::Part::OpValuePair->new(type => '>='); $p->data(\@_); $p}
-sub LT  ($) { my $p = SQL::Query::Builder::Query::Part::OpValuePair->new(type => '<');  $p->data(\@_); $p}
-sub LTE ($) { my $p = SQL::Query::Builder::Query::Part::OpValuePair->new(type => '<='); $p->data(\@_); $p}
+sub GT  ($) { SQL::Query::Builder::Query::Part::OpValuePair->new(type => '>' , data => \@_); }
+sub GTE ($) { SQL::Query::Builder::Query::Part::OpValuePair->new(type => '>=', data => \@_); }
+sub LT  ($) { SQL::Query::Builder::Query::Part::OpValuePair->new(type => '<' , data => \@_); }
+sub LTE ($) { SQL::Query::Builder::Query::Part::OpValuePair->new(type => '<=', data => \@_); }
 
-sub JOIN ($$) { my $j = SQL::Query::Builder::Query::Part::JOIN->new; $j->data(\@_); $j}
-sub LJOIN($$) { my $j = SQL::Query::Builder::Query::Part::JOIN->new(type => 'LEFT'); $j->data(\@_); $j}
+sub JOIN ($$) { SQL::Query::Builder::Query::Part::JOIN->new( data => \@_ ); }
+sub LJOIN($$) { SQL::Query::Builder::Query::Part::JOIN->new(type => 'LEFT', data => \@_); }
 
 
 #---------------------------------------------------------------------------
@@ -187,6 +187,8 @@ BEGIN {
       my @subparts;
       while (my @vals = $pair->()) {
          my ($col, $val) = @vals;
+         # in the simple col => 12 case we need to translate that to an OpValuePair so the rest of the magic works
+         $val = SQL::Query::Builder::Query::Part::OpValuePair->new(type => '=', data => [$val]) unless ref($val);
          push @subparts, SQL::Query::Builder::Query::Part::Set->new( type => 'AND', column=> $col, data => [$val] );
       }
       $set->data(\@subparts);
