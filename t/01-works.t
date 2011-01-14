@@ -35,7 +35,7 @@ isa_ok
 #---------------------------------------------------------------------------
 #  BASIC QUERY
 #---------------------------------------------------------------------------
-
+=pod
 eq_or_diff
    [SELECT->FROM('table')->build],
    [q{SELECT * FROM table},[]],
@@ -72,19 +72,19 @@ eq_or_diff
    [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => GT 12)->build],
    q{do particles work the same as the old hash syntax},
 ;
-
+=cut
 eq_or_diff
    [SELECT->FROM(qw{table})->WHERE(col => { '>' => 12, '<' => 15} )->build],
    [q{SELECT * FROM table WHERE (`col` > ? AND `col` < ?)},[12, 15]],
    q{GT expands correctly},
 ;
+__END__
 eq_or_diff
    [SELECT->FROM(q{table})->WHERE(col => {'>' => 12, '<' => 15})->build],
    [SELECT->FROM(q{table})->WHERE(col => AND [GT 12, LT 15])->build],
    q{Multiple hash is an implied AND set},
 ;
 
-#__END__
 eq_or_diff
    [SELECT->FROM('table')->WHERE(col=>OR[1..3])->build],
    [q{SELECT * FROM table WHERE (`col` = ? OR `col` = ? OR `col` = ?)},[1..3]],
@@ -104,7 +104,7 @@ eq_or_diff
 ;
 };
 
-#__END__
+__END__
 eq_or_diff
    [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => {'>' => 12})->build],
    [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => GT 12)->build],

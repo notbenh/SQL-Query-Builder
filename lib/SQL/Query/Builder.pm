@@ -35,9 +35,9 @@ sub SELECT {
 # col => OR[1,2]         ==> col = 1 OR col = 2
 # OR{col => 1, val => 2} ==> col = 1 OR val = 2
 
-sub AND ($) {}
-sub OR  ($) {}
-sub IN  ($) {}
+sub AND ($) { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'AND'); $s->data(@_); $s}
+sub OR  ($) { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'OR' ); $s->data(@_); $s}
+sub IN  ($) { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'IN' ); $s->data(@_); $s}
 
 sub GT  ($) {{'>' =>shift}}
 sub GTE ($) {{'>='=>shift}}
@@ -81,6 +81,12 @@ BEGIN {
       predicate => qq{has_data},
    ;
 
+   has joiner => 
+      is => 'rw',
+      isa => 'Str',
+      default => ', ',
+   ;
+
    # build returns a partial query string and an arrayref of bind vars
    sub build { 
       my $self = shift;
@@ -93,9 +99,43 @@ BEGIN {
          push @bv, @{ $bv || [] };
       }
 
-      return join( ', ', grep{defined} @q), \@bv;
+      return join( $self->joiner, grep{defined} @q), \@bv;
       
    }
+}
+
+BEGIN {
+   package SQL::Query::Builder::Query::Part::Set;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+   with qw{SQL::Query::Builder::Query::Util};
+
+   has [qw{type column}] => 
+      is => 'ro',
+      isa => 'Maybe[Str]',
+   ;
+
+   # set the joiner to the type for simplicity later
+   sub BUILD {
+      my $self = shift;
+      $self->joiner( sprintf q{ %s }, $self->type ) unless $self->type eq 'IN';
+   }
+
+   before build => sub{
+      my $self = shift;
+      $self->data([ map{ my $item = $_; 
+                         ref($item) eq 'HASH' ? do{ map { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'AND', column => $_ );
+                                                          $s->data([ $item->{$_} ]);
+                                                          $s;
+                                                        } keys %$item;
+                                                  }
+                                              : $item;
+                       } @{ $self->data }
+                 ]);
+#use Util::Log;
+#DUMP $self->data;
+   };
+
 }
 
 BEGIN {
@@ -103,6 +143,13 @@ BEGIN {
    use Mouse;
    extends qw{SQL::Query::Builder::Query::Part};
    with qw{SQL::Query::Builder::Query::Util};
+
+   sub build {
+      my $self = shift;
+      my $set  = SQL::Query::Builder::Query::Part::Set->new( type => 'AND' );
+      $set->data([{ @{ $self->data } }]); # store our ArrayRef data as a HashRef set as we expected the user to supply col names
+      $set->build;
+   }
 
 }
 
@@ -112,11 +159,7 @@ BEGIN {
    extends qw{SQL::Query::Builder::Query::Part};
    with qw{SQL::Query::Builder::Query::Util};
 
-   has type => 
-      is => 'ro', 
-      isa => 'Str',
-      default => '',
-   ;
+   has '+type' => default => '';
 
    # TODO due to part's default join ', ' we are ending up with "FROM table, JOIN table" => bad
 
@@ -223,3 +266,9 @@ BEGIN {
    has '+type' => default => 'SELECT';
 };
 
+
+__END__
+TODO:
+- would it make any sence to just have SELECT be a QUERY::PART ? 
+-- the thinking is that they already share the same API
+--- build is very simular
