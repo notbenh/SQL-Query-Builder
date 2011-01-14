@@ -37,7 +37,7 @@ sub SELECT {
 
 sub AND ($) { SQL::Query::Builder::Query::Part::Set->new( type => 'AND', data => $_[0]); }
 sub OR  ($) { SQL::Query::Builder::Query::Part::Set->new( type => 'OR' , data => $_[0]); }
-sub IN  ($) { SQL::Query::Builder::Query::Part::Set->new( type => 'IN' , data => $_[0]); }
+sub IN  ($) { SQL::Query::Builder::Query::Part::Set::IN->new( data => $_[0]); }
 
 sub GT  ($) { SQL::Query::Builder::Query::Part::OpValuePair->new(type => '>' , data => \@_); }
 sub GTE ($) { SQL::Query::Builder::Query::Part::OpValuePair->new(type => '>=', data => \@_); }
@@ -147,7 +147,7 @@ BEGIN {
    # set the joiner to the type for simplicity later
    sub BUILD {
       my $self = shift;
-      $self->joiner( sprintf q{ %s }, $self->type ) unless $self->type eq 'IN';
+      $self->joiner( sprintf q{ %s }, $self->type );
    }
 
    around build => sub{
@@ -168,9 +168,30 @@ BEGIN {
       return sprintf( $format, defined $self->column ? join( ' ', back_tick($self->column), $q) : $q )
            , $bv;
    };
-
-
 }
+
+BEGIN {
+   package SQL::Query::Builder::Query::Part::Set::IN;
+   use Mouse;
+   extends qw{SQL::Query::Builder::Query::Part};
+   with qw{SQL::Query::Builder::Query::Util};
+
+   has '+joiner' => default => ', ';
+
+   has [qw{type column}] => 
+      is => 'ro',
+      isa => 'Maybe[Str]',
+   ;
+
+   sub build {
+      my $self = shift;
+      my $q = defined $self->column ? back_tick($self->column) : ''; 
+      $q .= sprintf q{%sIN (%s)}, length($q) ? ' ' : '', soq($self->data);
+      return $q, $self->data;
+   }
+
+};
+
 
 BEGIN {
    package SQL::Query::Builder::Query::Part::WHERE;

@@ -71,7 +71,9 @@ eq_or_diff
    [q{SELECT * FROM table WHERE (`col` >= ? AND `col` <= ?)},[12, 15]],
    q{GT expands correctly},
 ;
-__END__
+
+TODO: {
+   local $TODO = q{do I really want to support the old style syntax?};
 eq_or_diff
    [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => {'>' => 12})->build],
    [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => GT 12)->build],
@@ -82,6 +84,8 @@ eq_or_diff
    [q{SELECT * FROM table WHERE (`col` > ? AND `col` < ?)},[12, 15]],
    q{old {} => AND notation still works},
 ;
+};
+
 eq_or_diff
    [SELECT->FROM(q{table})->WHERE(col => {'>' => 12, '<' => 15})->build],
    [SELECT->FROM(q{table})->WHERE(col => AND [GT 12, LT 15])->build],
