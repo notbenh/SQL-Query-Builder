@@ -13,6 +13,9 @@ our @EXPORT = qw{
    LTE
    GT
    GTE
+   EQ
+
+   NOT
    
    JOIN 
    LJOIN
@@ -35,14 +38,33 @@ sub SELECT {
 # col => OR[1,2]         ==> col = 1 OR col = 2
 # OR{col => 1, val => 2} ==> col = 1 OR val = 2
 
-sub AND ($) { SQL::Query::Builder::Query::Part::Set->new( type => 'AND', data => $_[0]); }
-sub OR  ($) { SQL::Query::Builder::Query::Part::Set->new( type => 'OR' , data => $_[0]); }
+sub SET ($$){ my ($type,$val) = @_;
+              my @data = ref($val) eq 'ARRAY' ? @$val
+                       : ref($val) eq 'HASH'  ? map{ SQL::Query::Builder::Query::Part::OpValuePair->new(type => '=' , data => [$val->{$_}], column => $_) } keys %$val
+                       :                        $val;
+              SQL::Query::Builder::Query::Part::Set->new( type => $type , data => \@data); 
+            }
+
+sub AND ($) { SET AND => shift }
+sub OR  ($) { SET OR  => shift }
+#sub AND ($) { SQL::Query::Builder::Query::Part::Set->new( type => 'AND', data => $_[0]); }
+#sub OR  ($) { SQL::Query::Builder::Query::Part::Set->new( type => 'OR' , data => $_[0]); }
 sub IN  ($) { SQL::Query::Builder::Query::Part::Set::IN->new( data => $_[0]); }
 
-sub GT  ($) { SQL::Query::Builder::Query::Part::OpValuePair->new(type => '>' , data => \@_); }
-sub GTE ($) { SQL::Query::Builder::Query::Part::OpValuePair->new(type => '>=', data => \@_); }
-sub LT  ($) { SQL::Query::Builder::Query::Part::OpValuePair->new(type => '<' , data => \@_); }
-sub LTE ($) { SQL::Query::Builder::Query::Part::OpValuePair->new(type => '<=', data => \@_); }
+
+sub OVP ($$){ use Scalar::Util qw{blessed};
+              my ($op, $val) = @_;
+              blessed($val) && $val->isa('SQL::Query::Builder::Query::Part::OpValuePair') 
+              ? $val # passthru
+              : SQL::Query::Builder::Query::Part::OpValuePair->new(type => $op , data => $val); 
+            }
+sub GT  ($) { OVP '>'  => \@_ }
+sub GTE ($) { OVP '>=' => \@_ }
+sub LT  ($) { OVP '<'  => \@_ }
+sub LTE ($) { OVP '<=' => \@_ }
+sub EQ  ($) { OVP '='  => \@_ }
+
+sub NOT ($) { die 'not built yet' };
 
 sub JOIN ($$) { SQL::Query::Builder::Query::Part::JOIN->new( data => \@_ ); }
 sub LJOIN($$) { SQL::Query::Builder::Query::Part::JOIN->new(type => 'LEFT', data => \@_); }
@@ -104,12 +126,6 @@ BEGIN {
       default => ', ',
    ;
 
-   has pass_to_build => 
-      is => 'rw',
-      isa => 'ArrayRef',
-      default => sub{[]},
-   ;
-
    # build returns a partial query string and an arrayref of bind vars
    sub build { 
       my $self = shift;
@@ -117,7 +133,7 @@ BEGIN {
       my @q;
       my @bv;
       foreach my $item (@{ $self->data }) {
-         my ($q,$bv) = blessed($item) && $item->can('build') ? $item->build(map{$self->$_} @{ $self->pass_to_build }) : $item;
+         my ($q,$bv) = blessed($item) && $item->can('build') ? $item->build : $item;
          push @q, $q;
          push @bv, @{ $bv || [] };
       }
@@ -157,8 +173,6 @@ BEGIN {
 
 
    has note => is => 'rw', isa => 'Str', default => ''; # DEBUGGING mostly
-
-   has '+pass_to_build' => default => sub{[qw{column}]};
 
    sub OVP ($$) { SQL::Query::Builder::Query::Part::OpValuePair->new(type => '=', column => shift, data => [shift]) };
    sub SET { SQL::Query::Builder::Query::Part::Set->new( @_ ); }
@@ -240,6 +254,7 @@ BEGIN {
                    : $ref eq 'HASH'              ? SAND column => $col,  data => [%$val] # col => {...} ==> col => AND{...} 
                    : $ref && $val->can('column') ? $val->has_column ? $val : do{ $val->column($col); $val } # push along $col if it's needed
                    : $ref                        ? $val # no clue... pass along
+                   : !defined $val && ref($col)  ? $col # likely a bare SET
                    :                               OVP $col => $val ;
 
 
@@ -392,3 +407,6 @@ TODO:
 
 - I would like to move type and column to a role that you include
 -- it would be nice that col would 'auto-back_tick' on read or possibly on insert?
+
+FAILING ISSUES:
+WHERE(OR{val=>1, val=>2}, col=> 1) ==> FAIL to step thru list correctly

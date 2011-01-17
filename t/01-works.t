@@ -10,7 +10,6 @@ use Util::Log;
 
 BEGIN { print qq{\n} for 1..10};
 
-
 #---------------------------------------------------------------------------
 #  DLS
 #---------------------------------------------------------------------------
@@ -148,17 +147,17 @@ eq_or_diff
    [q{SELECT * FROM db.table WHERE (`col` = (SELECT id FROM db.table WHERE `val` <= ?) OR `col` = (SELECT id FROM db.table WHERE `val` >= ?))},[12,12]],
    q{can do IN (subselects,subselect)}
 ;
-__END__
 
-TODO: {
-   local $TODO = q{sets currently do not yet self unpack, currently sets assume to contain only particles};
+#---------------------------------------------------------------------------
+#  LONE SETS
+#---------------------------------------------------------------------------
 eq_or_diff
-   [SELECT->FROM('table')->WHERE(''=>OR[col => 12, val => 15])->build],
+   [SELECT->FROM('table')->WHERE(OR{col => 12, val => 15})->build],
    [q{SELECT * FROM table WHERE (`col` = ? OR `val` = ?)},[12,15]],
    q{basic OR syntax}
 ;
-};
 
+__END__
 
 
 
