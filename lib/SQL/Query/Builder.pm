@@ -80,10 +80,14 @@ BEGIN {
    use Mouse;
    use Scalar::Util qw{blessed};
 
-   has type => 
-      is => 'ro',
+   has $_ => 
+      is => 'rw',
       isa => 'Maybe[Str]',
-   ;
+      lazy => 1,
+      default => '',
+      clearer => qq{clear_$_},
+      predicate => qq{has_$_},
+   for qw{type column} ;
 
    has data => 
       is => 'rw',
@@ -100,6 +104,12 @@ BEGIN {
       default => ', ',
    ;
 
+   has pass_to_build => 
+      is => 'rw',
+      isa => 'ArrayRef',
+      default => sub{[]},
+   ;
+
    # build returns a partial query string and an arrayref of bind vars
    sub build { 
       my $self = shift;
@@ -107,7 +117,7 @@ BEGIN {
       my @q;
       my @bv;
       foreach my $item (@{ $self->data }) {
-         my ($q,$bv) = blessed($item) && $item->can('build') ? $item->build : $item;
+         my ($q,$bv) = blessed($item) && $item->can('build') ? $item->build(map{$self->$_} @{ $self->pass_to_build }) : $item;
          push @q, $q;
          push @bv, @{ $bv || [] };
       }
@@ -127,7 +137,10 @@ BEGIN {
 
    sub build {
       my $self = shift;
-      my $q = join $self->joiner, $self->type, soq( $self->data );
+      my $q = join $self->joiner, grep{defined} 
+                                 $self->has_column ? back_tick( $self->column ) : undef 
+                                , $self->has_type   ?  $self->type               : undef # should never happen
+                                , soq( $self->data );
       return $q, $self->data;
    }
 };
@@ -136,13 +149,20 @@ BEGIN {
 BEGIN {
    package SQL::Query::Builder::Query::Part::Set;
    use Mouse;
+   use Scalar::Util qw{blessed};
+   use List::MoreUtils qw{natatime};
    extends qw{SQL::Query::Builder::Query::Part};
    with qw{SQL::Query::Builder::Query::Util};
 
-   has [qw{type column}] => 
-      is => 'ro',
-      isa => 'Maybe[Str]',
-   ;
+
+   has note => is => 'rw', isa => 'Str', default => ''; # DEBUGGING mostly
+
+   has '+pass_to_build' => default => sub{[qw{column}]};
+
+   sub OVP ($$) { SQL::Query::Builder::Query::Part::OpValuePair->new(type => '=', column => shift, data => [shift]) };
+   sub SET { SQL::Query::Builder::Query::Part::Set->new( @_ ); }
+   sub SOR { SET( type => 'OR' , @_ ) }
+   sub SAND{ SET( type => 'AND', @_ ) }
 
    # set the joiner to the type for simplicity later
    sub BUILD {
@@ -153,21 +173,24 @@ BEGIN {
    around build => sub{
       my $next = shift;
       my $self = shift;
-      $self->data([ map{ my $item = $_; 
-                         ref($item) eq 'HASH' ? do{ map { my $s = SQL::Query::Builder::Query::Part::Set->new( type => 'AND', column => $_ );
-                                                          $s->data([ $item->{$_} ]);
-                                                          $s;
-                                                        } keys %$item;
-                                                  }
-                                              : $item;
-                       } @{ $self->data }
-                 ]);
 
-      my ($q,$bv) = $self->$next(@_); 
-      my $format = scalar(@{ $self->data }) > 1 ? q{(%s)} : q{%s};
-      return sprintf( $format, defined $self->column ? join( ' ', back_tick($self->column), $q) : $q )
-           , $bv;
+      my @data = map{ my $ref = ref($_);
+                      $ref eq 'ARRAY' ? SOR @$_  # col => [...] ==> col => OR [...]
+                    : $ref eq 'HASH'  ? SAND %$_ # col => {...} ==> col => AND{...} 
+                    : $ref            ? $_->has_column ? $_ : do{ $_->column($self->column); $_ } # push along $col if it's needed
+                    :                   OVP $self->column => $_ ;
+                    } @{ $self->data };
+         
+
+      $self->data(\@data);
+
+      my ($q,$bv) = $self->$next(@_);
+      
+      return scalar( @{ $self->data } ) > 1 
+           ? (sprintf( q{(%s)}, $q), $bv) # wrap output in parens if there are more then one pair
+           : ($q, $bv) ;
    };
+
 }
 
 BEGIN {
@@ -177,11 +200,6 @@ BEGIN {
    with qw{SQL::Query::Builder::Query::Util};
 
    has '+joiner' => default => ', ';
-
-   has [qw{type column}] => 
-      is => 'ro',
-      isa => 'Maybe[Str]',
-   ;
 
    sub build {
       my $self = shift;
@@ -196,24 +214,37 @@ BEGIN {
 BEGIN {
    package SQL::Query::Builder::Query::Part::WHERE;
    use Mouse;
+   use Scalar::Util qw{blessed};
    use List::MoreUtils qw{natatime};
+
    extends qw{SQL::Query::Builder::Query::Part};
    with qw{SQL::Query::Builder::Query::Util};
 
+   sub OVP ($$) { SQL::Query::Builder::Query::Part::OpValuePair->new(type => '=', column => shift, data => [shift]) };
+   sub SET { SQL::Query::Builder::Query::Part::Set->new( @_ ); }
+   sub SOR { SET( type => 'OR' , @_ ) }
+   sub SAND{ SET( type => 'AND', @_ ) }
+
    sub build {
       my $self = shift;
-      my $set  = SQL::Query::Builder::Query::Part::Set->new( type => 'AND' );
+      my @data;
 
-      my $pair = natatime 2, @{$self->data};
-      my @subparts;
-      while (my @vals = $pair->()) {
-         my ($col, $val) = @vals;
-         # in the simple col => 12 case we need to translate that to an OpValuePair so the rest of the magic works
-         $val = SQL::Query::Builder::Query::Part::OpValuePair->new(type => '=', data => [$val]) unless ref($val);
-         push @subparts, SQL::Query::Builder::Query::Part::Set->new( type => 'AND', column=> $col, data => [$val] );
+      my $pairs = natatime 2, @{ $self->data };
+      while (my @pair = $pairs->()) {
+         my ($col, $val) = @pair;
+
+      my $ref = ref($val);
+      push @data, $ref eq 'ARRAY' ? SOR  column => $col, data => $val  # col => [...] ==> col => OR [...]
+                # TODO this conflicts with old-style col => { '>' => 1 }
+                : $ref eq 'HASH'  ? SAND column => $col,  data => [%$val] # col => {...} ==> col => AND{...} 
+                : $ref            ? $val->has_column ? $val : do{ $val->column($col); $val } # push along $col if it's needed
+                :                   OVP $col => $val ;
+
+
       }
-      $set->data(\@subparts);
-      $set->build;
+
+      # now build an AND set to do the join/build step for us
+      SAND( note => 'WHERE wrapper', data => \@data )->build;
    }
 
 }

@@ -57,7 +57,6 @@ eq_or_diff
    q{checking both types of WHAT syntax}
 ;
 
-
 #---------------------------------------------------------------------------
 #  WHERE SYNTAX
 #---------------------------------------------------------------------------
@@ -72,59 +71,60 @@ eq_or_diff
    q{GT expands correctly},
 ;
 
-TODO: {
-   local $TODO = q{do I really want to support the old style syntax?};
-eq_or_diff
-   [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => {'>' => 12})->build],
-   [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => GT 12)->build],
-   q{do particles work the same as the old hash syntax},
-;
-eq_or_diff
-   [SELECT->FROM(qw{table})->WHERE(col => { '>' => 12, '<' => 15} )->build],
-   [q{SELECT * FROM table WHERE (`col` > ? AND `col` < ?)},[12, 15]],
-   q{old {} => AND notation still works},
-;
-};
+SKIP: {
+      skip q{do I really want to support the old style syntax?}, 5;
 
-eq_or_diff
-   [SELECT->FROM(q{table})->WHERE(col => {'>' => 12, '<' => 15})->build],
-   [SELECT->FROM(q{table})->WHERE(col => AND [GT 12, LT 15])->build],
-   q{Multiple hash is an implied AND set},
-;
+   TODO: {
+      local $TODO = q{do I really want to support the old style syntax?};
+      eq_or_diff
+         [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => {'>' => 12})->build],
+         [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => GT 12)->build],
+         q{do particles work the same as the old hash syntax},
+      ;
+      eq_or_diff
+         [SELECT->FROM(qw{table})->WHERE(col => { '>' => 12, '<' => 15} )->build],
+         [q{SELECT * FROM table WHERE (`col` > ? AND `col` < ?)},[12, 15]],
+         q{old {} => AND notation still works},
+      ;
+      eq_or_diff
+         [SELECT->FROM(q{table})->WHERE(col => {'>' => 12, '<' => 15})->build],
+         [SELECT->FROM(q{table})->WHERE(col => AND [GT 12, LT 15])->build],
+         q{Multiple hash is an implied AND set},
+      ;
+      eq_or_diff
+         [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => {'>' => 12})->build],
+         [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => GT 12)->build],
+         q{do particles work the same as the old hash syntax},
+      ;
+
+
+      eq_or_diff
+         [SELECT->FROM(q{table})->WHERE(col => {'>' => 12, '<' => 15})->build],
+         [SELECT->FROM(q{table})->WHERE(col => AND[GT 12, LT 15])->build],
+         q{Multiple hash is an implied AND set},
+      ;
+   };
+};
 
 eq_or_diff
    [SELECT->FROM('table')->WHERE(col=>OR[1..3])->build],
    [q{SELECT * FROM table WHERE (`col` = ? OR `col` = ? OR `col` = ?)},[1..3]],
    q{ArrayRef is an implied OR block}
 ;
+
 eq_or_diff
    [SELECT->FROM('table')->WHERE(col=>[1..3])->build],
    [q{SELECT * FROM table WHERE (`col` = ? OR `col` = ? OR `col` = ?)},[1..3]],
    q{ArrayRef is an implied OR block}
 ;
-TODO: {
-   local $TODO = q{IN syntax not current supported};
 eq_or_diff
    [SELECT->FROM('table')->WHERE(col=>IN[1..3])->build],
    [q{SELECT * FROM table WHERE `col` IN (?,?,?)},[1..3]],
    q{IN syntax}
 ;
-};
+
 
 __END__
-eq_or_diff
-   [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => {'>' => 12})->build],
-   [SELECT->WHAT(qw{this that})->FROM(qw{here there})->WHERE(col => GT 12)->build],
-   q{do particles work the same as the old hash syntax},
-;
-
-
-eq_or_diff
-   [SELECT->FROM(q{table})->WHERE(col => {'>' => 12, '<' => 15})->build],
-   [SELECT->FROM(q{table})->WHERE(col => AND[GT 12, LT 15])->build],
-   q{Multiple hash is an implied AND set},
-;
-
 TODO: {
    local $TODO = q{Subselect is not currently supported};
 eq_or_diff
