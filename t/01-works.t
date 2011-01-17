@@ -123,10 +123,6 @@ eq_or_diff
    q{IN syntax}
 ;
 
-
-__END__
-TODO: {
-   local $TODO = q{Subselect is not currently supported};
 eq_or_diff
    [SELECT
     ->FROM('db.table')
@@ -134,7 +130,7 @@ eq_or_diff
                    ->FROM('db.table')
                    ->WHERE(val => LT 12)
            )->build],
-   [q{SELECT * FROM db.table WHERE col = (SELECT id FROM db.table WHERE val >= ?)},[12]],
+   [q{SELECT * FROM db.table WHERE `col` = (SELECT id FROM db.table WHERE `val` < ?)},[12]],
    q{can do subselects}
 ;
 
@@ -143,18 +139,16 @@ eq_or_diff
     ->FROM('db.table')
     ->WHERE(col => [ SELECT('id')
                      ->FROM('db.table')
-                     ->WHERE(val => LT 12)
-                     ->LIMIT(1),
+                     ->WHERE(val => LTE 12),
                      SELECT('id')
                      ->FROM('db.table')
-                     ->WHERE(val => GT 12)
-                     ->LIMIT(1),
+                     ->WHERE(val => GTE 12),
                    ],
            )->build],
-   [q{SELECT * FROM db.table WHERE ( col = (SELECT id FROM db.table WHERE val =< ?) OR (SELECT id FROM db.table WHERE val >= ?) ) },[12,12]],
+   [q{SELECT * FROM db.table WHERE (`col` = (SELECT id FROM db.table WHERE `val` <= ?) OR `col` = (SELECT id FROM db.table WHERE `val` >= ?))},[12,12]],
    q{can do IN (subselects,subselect)}
 ;
-};
+__END__
 
 TODO: {
    local $TODO = q{sets currently do not yet self unpack, currently sets assume to contain only particles};

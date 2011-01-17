@@ -135,6 +135,7 @@ BEGIN {
 
    has '+joiner' => default => ' ';
 
+   # TODO : This should look at data to see if it needs to run build or not?
    sub build {
       my $self = shift;
       my $q = join $self->joiner, grep{defined} 
@@ -233,12 +234,13 @@ BEGIN {
       while (my @pair = $pairs->()) {
          my ($col, $val) = @pair;
 
-      my $ref = ref($val);
-      push @data, $ref eq 'ARRAY' ? SOR  column => $col, data => $val  # col => [...] ==> col => OR [...]
-                # TODO this conflicts with old-style col => { '>' => 1 }
-                : $ref eq 'HASH'  ? SAND column => $col,  data => [%$val] # col => {...} ==> col => AND{...} 
-                : $ref            ? $val->has_column ? $val : do{ $val->column($col); $val } # push along $col if it's needed
-                :                   OVP $col => $val ;
+         my $ref = ref($val);
+         push @data, $ref eq 'ARRAY'             ? SOR  column => $col, data => $val  # col => [...] ==> col => OR [...]
+                   # TODO this conflicts with old-style col => { '>' => 1 }
+                   : $ref eq 'HASH'              ? SAND column => $col,  data => [%$val] # col => {...} ==> col => AND{...} 
+                   : $ref && $val->can('column') ? $val->has_column ? $val : do{ $val->column($col); $val } # push along $col if it's needed
+                   : $ref                        ? $val # no clue... pass along
+                   :                               OVP $col => $val ;
 
 
       }
@@ -358,8 +360,27 @@ BEGIN {
    package SQL::Query::Builder::Query::Select;
    use Mouse;
    extends qw{SQL::Query::Builder::Query};
+   with qw{SQL::Query::Builder::Query::Util};
 
    has '+type' => default => 'SELECT';
+   has column => 
+      is => 'rw',
+      isa => 'Maybe[Str]',
+      lazy => 1,
+      default => '',
+      clearer => qq{clear_column},
+      predicate => qq{has_column},
+   ;
+
+   around build => sub{
+      my $next = shift;
+      my $self = shift;
+
+      my ($q,$bv) = $self->$next(@_);
+      return $self->has_column ? ( sprintf( q{%s = (%s)}, back_tick( $self->column ), $q), $bv )
+                               : ($q, $bv)
+   };
+      
 };
 
 
@@ -368,3 +389,6 @@ TODO:
 - would it make any sence to just have SELECT be a QUERY::PART ? 
 -- the thinking is that they already share the same API
 --- build is very simular
+
+- I would like to move type and column to a role that you include
+-- it would be nice that col would 'auto-back_tick' on read or possibly on insert?
