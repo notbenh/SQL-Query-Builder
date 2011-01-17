@@ -190,3 +190,54 @@ eq_or_diff
    q{yup that looks about right},
 ;
 
+__END__
+ok 1 - [DSL] JOIN isa SQL::Query::Builder::Query::Part::JOIN
+ok 2 - [DSL] LJOIN isa SQL::Query::Builder::Query::Part::JOIN
+ok 3 - [DSL] LJOIN sets type to 'LEFT'
+ok 4 - [DSL] SELECT isa SQL::Query::Builder::Query::Select
+ok 5 - SELECT FROM
+ok 6 - basic query works
+ok 7 - checking both types of WHAT syntax
+ok 8 - GT expands correctly
+ok 9 - GT expands correctly
+ok 10 # skip do I really want to support the old style syntax?
+ok 11 # skip do I really want to support the old style syntax?
+ok 12 # skip do I really want to support the old style syntax?
+ok 13 # skip do I really want to support the old style syntax?
+ok 14 # skip do I really want to support the old style syntax?
+ok 15 - ArrayRef is an implied OR block
+ok 16 - ArrayRef is an implied OR block
+ok 17 - IN syntax
+ok 18 - can do subselects
+ok 19 - can do IN (subselects,subselect)
+ok 20 - basic OR syntax
+ok 21 - basic OR syntax with extras
+not ok 22 - JOIN USING # TODO JOINs have not yet been worked out completely, the FROM block still joins with ', ' thus you end up with FROM table, JOIN
+#   Failed (TODO) test 'JOIN USING'
+#   at t/01-works.t line 170.
+# +----+-------------------------------------------------------------------------------+------------------------------------------------------------------------------+
+# | Elt|Got                                                                            |Expected                                                                      |
+# +----+-------------------------------------------------------------------------------+------------------------------------------------------------------------------+
+# |   0|[                                                                              |[                                                                             |
+# *   1|  'SELECT * FROM table T1, JOIN table T2 USING (`col`) WHERE `T1`.`col` > ?',  |  'SELECT * FROM table T1 JOIN table T2 USING (`col`) WHERE `T1`.`col` > ?',  *
+# |   2|  [                                                                            |  [                                                                           |
+# |   3|    12                                                                         |    12                                                                        |
+# |   4|  ]                                                                            |  ]                                                                           |
+# |   5|]                                                                              |]                                                                             |
+# +----+-------------------------------------------------------------------------------+------------------------------------------------------------------------------+
+not ok 23 - JOIN USING # TODO JOINs have not yet been worked out completely, the FROM block still joins with ', ' thus you end up with FROM table, JOIN
+#   Failed (TODO) test 'JOIN USING'
+#   at t/01-works.t line 175.
+# +----+-------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------+
+# | Elt|Got                                                                                                                            |Expected                                                                                                                      |
+# +----+-------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------+
+# |   0|[                                                                                                                              |[                                                                                                                             |
+# *   1|  'SELECT * FROM table T1, LEFT JOIN table T2 ON (`T1`.`col` = `T2`.`col` AND `T1`.`val` = `T2`.`val`) WHERE `T1`.`col` > ?',  |  'SELECT * FROM table T1 LEFT JOIN table T2 ON (`T1`.`col` = `T2`.`col` AND `T1`.`val` = `T2`.`val`) WHERE `T1`.`col` > ?',  *
+# |   2|  [                                                                                                                            |  [                                                                                                                           |
+# |   3|    12                                                                                                                         |    12                                                                                                                        |
+# |   4|  ]                                                                                                                            |  ]                                                                                                                           |
+# |   5|]                                                                                                                              |]                                                                                                                             |
+# +----+-------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------+
+ok 24 - yup that looks about right
+1..24
+
