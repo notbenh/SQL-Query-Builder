@@ -34,10 +34,6 @@ sub SELECT {
 # $query->FROM('other'); # would expect to be FROM('table', 'other') but currently this will just be FROM('other')
 
 
-# TODO There is two diffrent context for sets 
-# col => OR[1,2]         ==> col = 1 OR col = 2
-# OR{col => 1, val => 2} ==> col = 1 OR val = 2
-
 sub SET ($$){ my ($type,$val) = @_;
               my @data = ref($val) eq 'ARRAY' ? @$val
                        : ref($val) eq 'HASH'  ? map{ SQL::Query::Builder::Query::Part::OpValuePair->new(type => '=' , data => [$val->{$_}], column => $_) } keys %$val
@@ -47,11 +43,9 @@ sub SET ($$){ my ($type,$val) = @_;
 
 sub AND ($) { SET AND => shift }
 sub OR  ($) { SET OR  => shift }
-#sub AND ($) { SQL::Query::Builder::Query::Part::Set->new( type => 'AND', data => $_[0]); }
-#sub OR  ($) { SQL::Query::Builder::Query::Part::Set->new( type => 'OR' , data => $_[0]); }
 sub IN  ($) { SQL::Query::Builder::Query::Part::Set::IN->new( data => $_[0]); }
 
-
+# TODO I'm not really sold yet on having an generic OVP builder 
 sub OVP ($$){ use Scalar::Util qw{blessed};
               my ($op, $val) = @_;
               blessed($val) && $val->isa('SQL::Query::Builder::Query::Part::OpValuePair') 
@@ -64,7 +58,7 @@ sub LT  ($) { OVP '<'  => \@_ }
 sub LTE ($) { OVP '<=' => \@_ }
 sub EQ  ($) { OVP '='  => \@_ }
 
-sub NOT ($) { die 'not built yet' };
+sub NOT ($) { die 'not built yet' }; # TODO this should take an OVP (or build an EQ) and then prepend the op with '!'
 
 sub JOIN ($$) { SQL::Query::Builder::Query::Part::JOIN->new( data => \@_ ); }
 sub LJOIN($$) { SQL::Query::Builder::Query::Part::JOIN->new(type => 'LEFT', data => \@_); }
@@ -171,8 +165,7 @@ BEGIN {
    extends qw{SQL::Query::Builder::Query::Part};
    with qw{SQL::Query::Builder::Query::Util};
 
-
-   has note => is => 'rw', isa => 'Str', default => ''; # DEBUGGING mostly
+   has note => is => 'rw', isa => 'Str', default => ''; # DEBUGGING mostly not used durring build
 
    sub OVP ($$) { SQL::Query::Builder::Query::Part::OpValuePair->new(type => '=', column => shift, data => [shift]) };
    sub SET { SQL::Query::Builder::Query::Part::Set->new( @_ ); }
@@ -253,11 +246,6 @@ BEGIN {
             $col = undef;
          } 
 
-
-      #my $pairs = natatime 2, @{ $self->data };
-      #while (my @pair = $pairs->()) {
-      #   my ($col, $val) = @pair;
-
          my $ref = ref($val);
          push @data, $ref eq 'ARRAY'             ? SOR  column => $col, data => $val  # col => [...] ==> col => OR [...]
                    # TODO this conflicts with old-style col => { '>' => 1 }
@@ -286,7 +274,7 @@ BEGIN {
 
    # TODO due to part's default join ', ' we are ending up with "FROM table, JOIN table" => bad
 
-   # TODO the JOIN table => {} notation should hand that hash to WHERE
+   # TODO the JOIN table => {} notation should hand that hash to WHERE as to build out things correctly
 
    sub build {
       my $self = shift;
@@ -418,5 +406,3 @@ TODO:
 - I would like to move type and column to a role that you include
 -- it would be nice that col would 'auto-back_tick' on read or possibly on insert?
 
-FAILING ISSUES:
-WHERE(OR{val=>1, val=>2}, col=> 1) ==> FAIL to step thru list correctly
