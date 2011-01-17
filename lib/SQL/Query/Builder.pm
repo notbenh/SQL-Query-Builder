@@ -244,9 +244,19 @@ BEGIN {
       my $self = shift;
       my @data;
 
-      my $pairs = natatime 2, @{ $self->data };
-      while (my @pair = $pairs->()) {
-         my ($col, $val) = @pair;
+      my @raw = @{ $self->data };
+      while ( my ($col,$val) = splice @raw, 0, 2 ) {
+         if( ref($col) ) {
+            # wait... col should never be anything other then a scalar. can be triggered like WHERE(OR{...},col => 1)
+            unshift @raw, $val if defined $val; # might be the end of the stack, no need to make extra messes
+            $val = $col;
+            $col = undef;
+         } 
+
+
+      #my $pairs = natatime 2, @{ $self->data };
+      #while (my @pair = $pairs->()) {
+      #   my ($col, $val) = @pair;
 
          my $ref = ref($val);
          push @data, $ref eq 'ARRAY'             ? SOR  column => $col, data => $val  # col => [...] ==> col => OR [...]

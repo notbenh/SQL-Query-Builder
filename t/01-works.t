@@ -157,9 +157,9 @@ eq_or_diff
    q{basic OR syntax}
 ;
 eq_or_diff
-   [SELECT->FROM('table')->WHERE(OR{val => 12, val => 15}, col=> 13 )->build],
-   [q{SELECT * FROM table WHERE (`cal` = ? OR `val` = ?) AND `col` = ?},[12,15,13]],
-   q{basic OR syntax}
+   [SELECT->FROM('table')->WHERE(OR{one => 12, val => 15}, col=> 13 )->build],
+   [q{SELECT * FROM table WHERE ((`one` = ? OR `val` = ?) AND `col` = ?)},[12,15,13]],
+   q{basic OR syntax with extras}
 ;
 
 __END__
