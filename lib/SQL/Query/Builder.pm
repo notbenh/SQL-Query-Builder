@@ -218,6 +218,26 @@ BEGIN {
 
 };
 
+BEGIN {
+   package SQL::Query::Builder::Query::Part::FROM;
+   use Mouse;
+   use Scalar::Util qw{blessed};
+   use List::Bisect;
+   extends qw{SQL::Query::Builder::Query::Part};
+   with qw{SQL::Query::Builder::Query::Util};
+   
+   around build => sub {
+      my $next = shift;
+      my $self = shift;
+      my ($J,$T) = bisect {blessed($_) && $_->isa('SQL::Query::Builder::Query::Part::JOIN')} @{ $self->data };
+      
+      push @$T, join ' ', pop @$T, map{ [$_->build]->[0] } @$J; # TODO this relies on JOIN NEVER having any bindvars
+      $self->data($T);
+      $self->$next(@_);
+   };
+};
+   
+   
 
 BEGIN {
    package SQL::Query::Builder::Query::Part::WHERE;
