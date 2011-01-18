@@ -406,3 +406,39 @@ TODO:
 - I would like to move type and column to a role that you include
 -- it would be nice that col would 'auto-back_tick' on read or possibly on insert?
 
+
+- one idea for the FROM JOIN issue is to bisect {is_join} and then join all JOINs and the last item of non-JOINs by ' ' then push that back as the last item of the non-JOINs and then join all non-JOINs with ', '... messy but should work. 
+-- really highlites the need that PART::build to be a bit more abstract to plug in features like this.
+--- look at all builds to see if there are things that should be broken out?
+
+
+__END__
+simple 'finder' wrapper:
+
+package My::Finder;
+use Mouse;
+extends qw{ SQL::Query::Builder::Query::Select };
+with qw{
+   MooseP::Setup::Database
+   MooseP::Setup::Cache
+};
+
+has '+WHAT' => default => sub{[qw{this that}]};
+has '+FROM' => default => sub{[qw{table}]};
+
+sub find {
+   my $self = shift;
+   $self->WHERE(@_);
+   return $self->d->selectall_arrayref($self->dbi({Slice=>{}}) );
+}
+
+# would be global to some base finder obj
+around find {
+   my $next = shift;
+   my $self = shift;
+   my $key  = $self->cache->build_key(__PACKAGE__ => @_);
+   $self->cache->get($key) || do{ my $val = $self->$next(@_); $self->cache->set($key, $val, $self->expire); $val};
+}
+     
+
+
