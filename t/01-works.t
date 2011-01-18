@@ -165,8 +165,6 @@ eq_or_diff
 #---------------------------------------------------------------------------
 #  JOINS
 #---------------------------------------------------------------------------
-TODO: {
-   local $TODO = q{JOINs have not yet been worked out completely, the FROM block still joins with ', ' thus you end up with FROM table, JOIN};
 eq_or_diff
    [SELECT->FROM('table T1', JOIN 'table T2' => 'col' )->WHERE('T1.col' => GT 12)->build],
    [q{SELECT * FROM table T1 JOIN table T2 USING (`col`) WHERE `T1`.`col` > ?},[12]],
@@ -177,9 +175,6 @@ eq_or_diff
    [q{SELECT * FROM table T1 LEFT JOIN table T2 ON (`T1`.`col` = `T2`.`col` AND `T1`.`val` = `T2`.`val`) WHERE `T1`.`col` > ?},[12]],
    q{JOIN USING}
 ;
-
-};
-
 
 #---------------------------------------------------------------------------
 #  DBI syntax
