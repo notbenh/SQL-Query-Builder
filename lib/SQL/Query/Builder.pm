@@ -1,6 +1,33 @@
 package SQL::Query::Builder;
 use strict;
 use warnings;
+
+# ABSTRACT: a completely OO driven way to build SQL queries.
+
+=head1 SYNOPSIS
+
+  use SQL::Query::Builder;
+  use DBI;
+  my $dbh = DBI->connect(...);
+
+  # start to build out our query object
+  my $query = SELECT->FROM('table')->WHERE(col => [1..3);
+
+  # because $query is an object we can still modify it 
+  $query->LIMIT(2);
+
+  # so whats the current state of things?
+  my ($query, $bind_vars) = $query->build;
+
+  # $query is a string: SELECT * FROM table WHERE (`col` = ? OR `col` = ? OR `col` = ?) LIMIT 2
+  # $bind_vars is an arrayref [1,2,3]
+
+  # then when we are ready we pull the trigger
+  my $data = $dbh->selectall_arrayref($query->dbi(Slice=>{}));
+
+  
+=cut
+
 use Exporter qw{import};
 our @EXPORT = qw{
    SELECT
@@ -21,7 +48,24 @@ our @EXPORT = qw{
    LJOIN
 };
 
-# ABSTRACT: a completely OO driven way to build SQL queries.
+=head1 EXPORTED FUNCTIONS
+
+All the exported functions are wrapers around object constructors.
+
+=head2 SELECT 
+
+Builds a SQL::Query::Builder::Query::Select object for you.
+
+  my $query = SELECT; #most basic case
+
+Due to SQL::Query::Builder::Query::Select not needing anything at new, any items passed to 
+SELECT will be passed to it's WHAT block. 
+
+  SELECT('something') == SELECT->WHAT('something')
+
+If nothing is passed, WHAT defaults to '*'.
+
+=cut
 
 sub SELECT { 
    my $q = SQL::Query::Builder::Query::Select->new;
@@ -34,6 +78,29 @@ sub SELECT {
 # $query->FROM('other'); # would expect to be FROM('table', 'other') but currently this will just be FROM('other')
 
 
+=head2 AND & OR
+
+Builds a SQL::Query::Builder::Query::Part::Set, setting 'type' to 'AND' or 'OR'. There are two expected context, the following
+two notations resolve to the same. 
+
+  AND{ col => 12, col => 13} # (`col` = ? AND `col` = ?)[12,13]
+  col => AND[12,13]          # (`col` = ? AND `col` = ?)[12,13]
+
+Same for OR:
+
+  OR{ col => 12, col => 13} # (`col` = ? OR `col` = ?)[12,13]
+  col => OR[12,13]          # (`col` = ? OR `col` = ?)[12,13]
+
+Context is derived based on the ref type that wraps the data.
+
+=head2 IN
+
+Builds a SQL::Query::Builder::Query::Part::Set::IN object, unline AND/OR, IN only takes arrayrefs:
+
+  col => IN[12,13]  # `col` IN (?,?) [12,13]
+
+=cut
+
 sub SET ($$){ my ($type,$val) = @_;
               my @data = ref($val) eq 'ARRAY' ? @$val
                        : ref($val) eq 'HASH'  ? map{ SQL::Query::Builder::Query::Part::OpValuePair->new(type => '=' , data => [$val->{$_}], column => $_) } keys %$val
@@ -44,6 +111,23 @@ sub SET ($$){ my ($type,$val) = @_;
 sub AND ($) { SET AND => shift }
 sub OR  ($) { SET OR  => shift }
 sub IN  ($) { SQL::Query::Builder::Query::Part::Set::IN->new( data => $_[0]); }
+
+=head2 GT
+=head2 GTE
+=head2 LT
+=head2 LTE
+=head2 EQ 
+
+Builds a SQL::Query::Builder::Query::Part::OpValuePair object, setting 'type' to the correct op based on what was called.
+
+  col => GT  12 # `col` > ? [12]
+  col => GTE 12 # `col` >= ? [12]
+  col => LT  12 # `col` < ? [12]
+  col => LTE 12 # `col` <= ? [12]
+  col => EQ  12 # `col` = ? [12]
+
+=cut
+
 
 # TODO I'm not really sold yet on having an generic OVP builder 
 sub OVP ($$){ use Scalar::Util qw{blessed};
@@ -58,7 +142,28 @@ sub LT  ($) { OVP '<'  => \@_ }
 sub LTE ($) { OVP '<=' => \@_ }
 sub EQ  ($) { OVP '='  => \@_ }
 
+=head2 NOT
+
+Currently NOT is not implimented, though it is exported. 
+
+=cut
+
 sub NOT ($) { die 'not built yet' }; # TODO this should take an OVP (or build an EQ) and then prepend the op with '!'
+
+=head2 JOIN & LJOIN
+
+Build SQL::Query::Builder::Query::Part::JOIN setting 'type' accordingly. JOIN is only useful while defining the 
+FROM block of the query. There are two context. 
+
+  # 'USING' notation is a scalar value
+  SELECT->FROM(table, JOIN table2 => col) 
+  # SELECT * FROM table JOIN table2 USING (col)
+
+  # 'ON' notation is a hashref as value
+  SELECT->FROM(table, JOIN table2 -> {'table.id' => 'table2.t1_id'}) 
+  # SELECT * FROM table JOIN table2 ON (`table`.`id` = `table2`.`t1_id`)
+
+=cut
 
 sub JOIN ($$) { SQL::Query::Builder::Query::Part::JOIN->new( data => \@_ ); }
 sub LJOIN($$) { SQL::Query::Builder::Query::Part::JOIN->new(type => 'LEFT', data => \@_); }
