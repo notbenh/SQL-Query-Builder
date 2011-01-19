@@ -113,17 +113,25 @@ sub OR  ($) { SET OR  => shift }
 sub IN  ($) { SQL::Query::Builder::Query::Part::Set::IN->new( data => $_[0]); }
 
 =head2 GT
-=head2 GTE
-=head2 LT
-=head2 LTE
-=head2 EQ 
 
 Builds a SQL::Query::Builder::Query::Part::OpValuePair object, setting 'type' to the correct op based on what was called.
 
   col => GT  12 # `col` > ? [12]
+
+=head2 GTE
+
   col => GTE 12 # `col` >= ? [12]
+
+=head2 LT
+
   col => LT  12 # `col` < ? [12]
+
+=head2 LTE
+
   col => LTE 12 # `col` <= ? [12]
+
+=head2 EQ 
+
   col => EQ  12 # `col` = ? [12]
 
 =cut
