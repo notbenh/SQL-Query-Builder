@@ -78,7 +78,30 @@ sub SELECT {
 # $query->FROM('other'); # would expect to be FROM('table', 'other') but currently this will just be FROM('other')
 
 
-=head2 AND & OR
+=head2 exports to be use in FROM
+
+=head3 JOIN & LJOIN
+
+Build SQL::Query::Builder::Query::Part::JOIN setting 'type' accordingly. JOIN is only useful while defining the 
+FROM block of the query. There are two context. 
+
+  # 'USING' notation is a scalar value
+  SELECT->FROM(table, JOIN table2 => col) 
+  # SELECT * FROM table JOIN table2 USING (col)
+
+  # 'ON' notation is a hashref as value
+  SELECT->FROM(table, JOIN table2 -> {'table.id' => 'table2.t1_id'}) 
+  # SELECT * FROM table JOIN table2 ON (`table`.`id` = `table2`.`t1_id`)
+
+=cut
+
+sub JOIN ($$) { SQL::Query::Builder::Query::Part::JOIN->new( data => \@_ ); }
+sub LJOIN($$) { SQL::Query::Builder::Query::Part::JOIN->new(type => 'LEFT', data => \@_); }
+
+
+=head2 exports to be use in WHERE
+
+=head3 AND & OR
 
 Builds a SQL::Query::Builder::Query::Part::Set, setting 'type' to 'AND' or 'OR'. There are two expected context, the following
 two notations resolve to the same. 
@@ -93,7 +116,7 @@ Same for OR:
 
 Context is derived based on the ref type that wraps the data.
 
-=head2 IN
+=head3 IN
 
 Builds a SQL::Query::Builder::Query::Part::Set::IN object, unline AND/OR, IN only takes arrayrefs:
 
@@ -112,25 +135,25 @@ sub AND ($) { SET AND => shift }
 sub OR  ($) { SET OR  => shift }
 sub IN  ($) { SQL::Query::Builder::Query::Part::Set::IN->new( data => $_[0]); }
 
-=head2 GT
+=head3 GT
 
 Builds a SQL::Query::Builder::Query::Part::OpValuePair object, setting 'type' to the correct op based on what was called.
 
   col => GT  12 # `col` > ? [12]
 
-=head2 GTE
+=head3 GTE
 
   col => GTE 12 # `col` >= ? [12]
 
-=head2 LT
+=head3 LT
 
   col => LT  12 # `col` < ? [12]
 
-=head2 LTE
+=head3 LTE
 
   col => LTE 12 # `col` <= ? [12]
 
-=head2 EQ 
+=head3 EQ 
 
   col => EQ  12 # `col` = ? [12]
 
@@ -150,31 +173,13 @@ sub LT  ($) { OVP '<'  => \@_ }
 sub LTE ($) { OVP '<=' => \@_ }
 sub EQ  ($) { OVP '='  => \@_ }
 
-=head2 NOT
+=head3 NOT
 
 Currently NOT is not implimented, though it is exported. 
 
 =cut
 
 sub NOT ($) { die 'not built yet' }; # TODO this should take an OVP (or build an EQ) and then prepend the op with '!'
-
-=head2 JOIN & LJOIN
-
-Build SQL::Query::Builder::Query::Part::JOIN setting 'type' accordingly. JOIN is only useful while defining the 
-FROM block of the query. There are two context. 
-
-  # 'USING' notation is a scalar value
-  SELECT->FROM(table, JOIN table2 => col) 
-  # SELECT * FROM table JOIN table2 USING (col)
-
-  # 'ON' notation is a hashref as value
-  SELECT->FROM(table, JOIN table2 -> {'table.id' => 'table2.t1_id'}) 
-  # SELECT * FROM table JOIN table2 ON (`table`.`id` = `table2`.`t1_id`)
-
-=cut
-
-sub JOIN ($$) { SQL::Query::Builder::Query::Part::JOIN->new( data => \@_ ); }
-sub LJOIN($$) { SQL::Query::Builder::Query::Part::JOIN->new(type => 'LEFT', data => \@_); }
 
 
 #---------------------------------------------------------------------------
