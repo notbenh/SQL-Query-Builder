@@ -1,168 +1,91 @@
-=pod
-BEGIN {
-   package SQL::Query::Builder::Query::Part::WHAT;
-   use Util::Log;
-   use Mouse;
-   extends qw{SQL::Query::Builder::Query::Part};
-};
+=head1 SYNOPSIS
 
-BEGIN {
-   package SQL::Query::Builder::Query::Part::FROM;
-   use Util::Log;
-   use Mouse;
-   extends qw{SQL::Query::Builder::Query::Part};
-};
-BEGIN {
-   package SQL::Query::Builder::Query::Part::GROUP;
-   use Util::Log;
-   use Mouse;
-   extends qw{SQL::Query::Builder::Query::Part};
-};
+  use SQL::Query::Builder;
+  use DBI;
+  my $dbh = DBI->connect(...);
 
-BEGIN {
-   package SQL::Query::Builder::Query::Part::HAVING;
-   use Util::Log;
-   use Mouse;
-   extends qw{SQL::Query::Builder::Query::Part};
-};
+  # start to build out our query object
+  my $query = SELECT->FROM('table')->WHERE(col => [1..3);
 
-BEGIN {
-   package SQL::Query::Builder::Query::Part::ORDER;
-   use Util::Log;
-   use Mouse;
-   extends qw{SQL::Query::Builder::Query::Part};
-};
-=cut
-BEGIN {
-   package SQL::Query::Builder::Query::Part::LIMIT;
-BEGIN {
-  $SQL::Query::Builder::Query::Part::LIMIT::VERSION = '0.001_01';
-}
-   use Util::Log;
-   use Mouse;
-   extends qw{SQL::Query::Builder::Query::Part};
+  # because $query is an object we can still modify it 
+  $query->LIMIT(2);
 
-   sub output { shift->query->[0] || 1 };
-};
+  # so whats the current state of things?
+  my ($query, $bind_vars) = $query->build;
 
-BEGIN {
-   package SQL::Query::Builder::Query;
-BEGIN {
-  $SQL::Query::Builder::Query::VERSION = '0.001_01';
-}
-   use Util::Log;
-   use Sub::Identify ':all';
-   use Mouse;
-   with qw{SQL::Query::Builder::Query::Types};
+  # $query is a string: SELECT * FROM table WHERE (`col` = ? OR `col` = ? OR `col` = ?) LIMIT 2
+  # $bind_vars is an arrayref [1,2,3]
 
-   use constant QUERY_PARTS => qw{ WHAT 
-                                   FROM
-                                   JOIN 
-                                   LJION
-                                   WHERE
-                                   GROUP
-                                   HAVING
-                                   ORDER
-                                   LIMIT
-                                 };
+  # then when we are ready we pull the trigger
+  my $data = $dbh->selectall_arrayref($query->dbi(Slice=>{}));
 
-   has type => 
-      is => 'ro',
-      isa => 'SQL_Query_Type',
-      coerce => 1,
-      required => 1,
-   ;
+  
+=head1 EXPORTED FUNCTIONS
 
-   for my $part (QUERY_PARTS) {
-      has qq{$part} =>
-         is => 'rw',
-         isa => qq{SQL::Query::Builder::Query::Part},
-         lazy => 1,
-         default => sub{
+All the exported functions are wrapers around object constructors.
 
-            # TODO: this will have to change when broken to there own files
-            my $out;
-            eval { my $class = qq{SQL::Query::Builder::Query::Part::$part};
-                   $out = $class->new;
-                 } or do { $out = SQL::Query::Builder::Query::Part->new };
-            $out;
+=head2 SELECT 
 
-            #require SQL::Query::Builder::Query::Part;
-            #my $class = qq{SQL::Query::Builder::Query::Part::$part};
-            #eval qq{require $class} or do {$class = q{SQL::Query::Builder::Query::Part};} ;
-            #$class->new;
-         }, 
-         handles => { # my => there
-                      qq{has_query_$part}      => q{has_query},
-                      qq{clear_query_$part}    => q{clear_query},
-                      qq{has_bindvars_$part}   => q{has_bindvars},
-                      qq{clear_bindvars_$part} => q{clear_bindvars},
-                    },
-         predicate => qq{has_$part},
-         clearer => qq{clear_$part},
-      ;
-   
-      # I want to keep the 'moose' API where you have one method that deligates to 
-      # get or set the value, though this attr is an object. I don't want to reset
-      # the object, I want to set values in the object. Though 'has' builds us our
-      # the method to access the object, but it's going to point to the wrong place.
-      # This modifier corrects this so we can still call 'WHAT' but it pushes the 
-      # data passed to WHAT->input(@_) and input will do 'the right thing' from there.
+Builds a SQL::Query::Builder::Query::Select object for you.
 
-      # Also while we are looping, I want to be able to chain these methods if they 
-      # are called in 'setter' mode. Note the 'do' block returns $self.
-      around $part => sub{
-         my $next = shift;
-         my $self = shift;
-         return @_ ? do{$self->$next->input(@_);$self} : $self->$next->output;
-      };
+  my $query = SELECT; #most basic case
 
-   }
+Due to SQL::Query::Builder::Query::Select not needing anything at new, any items passed to 
+SELECT will be passed to it's WHAT block. 
 
-   sub _raw {
-      my $self      = shift;
-      [$self->meta->get_method_list];
-   };
+  SELECT('something') == SELECT->WHAT('something')
 
-   sub dbi   { shift }
-   sub build { 
-      my $self = shift;
+If nothing is passed, WHAT defaults to '*'.
 
-      my ($where_query, $bindvars) = $self->WHERE;
-      my @query = grep{ defined }
-                    $self->type
-                  , join( ', ', $self->WHAT) || undef 
-                  , FROM => $self->FROM,
-                  , length($where_query) ? (WHERE => $where_query) : ()
-                  , map { my $disp = $_ eq 'GROUP' ? 'GROUP BY' : $_;
-                          $disp, $self->$_
-                        } 
-                    grep{my $has = qq{has_$_};$self->$has}
-                    qw{ GROUP HAVING ORDER LIMIT }
-                  ;
+=head2 AND & OR
 
-      my $q = join ' ', @query;
-      return $q, $bindvars;
-   }
-   
-   no Mouse::Util::TypeConstraints;
-   no Mouse;
+Builds a SQL::Query::Builder::Query::Part::Set, setting 'type' to 'AND' or 'OR'. There are two expected context, the following
+two notations resolve to the same. 
 
-};
+  AND{ col => 12, col => 13} # (`col` = ? AND `col` = ?)[12,13]
+  col => AND[12,13]          # (`col` = ? AND `col` = ?)[12,13]
 
+Same for OR:
 
-BEGIN {
-   package SQL::Query::Builder::Query::Select;
-BEGIN {
-  $SQL::Query::Builder::Query::Select::VERSION = '0.001_01';
-}
-   use Mouse;
-   extends qw{SQL::Query::Builder::Query};
+  OR{ col => 12, col => 13} # (`col` = ? OR `col` = ?)[12,13]
+  col => OR[12,13]          # (`col` = ? OR `col` = ?)[12,13]
 
-   has '+type' => default => 'SELECT';
+Context is derived based on the ref type that wraps the data.
 
-};
+=head2 IN
 
-   
-1;
+Builds a SQL::Query::Builder::Query::Part::Set::IN object, unline AND/OR, IN only takes arrayrefs:
+
+  col => IN[12,13]  # `col` IN (?,?) [12,13]
+
+=head2 GT
+=head2 GTE
+=head2 LT
+=head2 LTE
+=head2 EQ 
+
+Builds a SQL::Query::Builder::Query::Part::OpValuePair object, setting 'type' to the correct op based on what was called.
+
+  col => GT  12 # `col` > ? [12]
+  col => GTE 12 # `col` >= ? [12]
+  col => LT  12 # `col` < ? [12]
+  col => LTE 12 # `col` <= ? [12]
+  col => EQ  12 # `col` = ? [12]
+
+=head2 NOT
+
+Currently NOT is not implimented, though it is exported. 
+
+=head2 JOIN & LJOIN
+
+Build SQL::Query::Builder::Query::Part::JOIN setting 'type' accordingly. JOIN is only useful while defining the 
+FROM block of the query. There are two context. 
+
+  # 'USING' notation is a scalar value
+  SELECT->FROM(table, JOIN table2 => col) 
+  # SELECT * FROM table JOIN table2 USING (col)
+
+  # 'ON' notation is a hashref as value
+  SELECT->FROM(table, JOIN table2 -> {'table.id' => 'table2.t1_id'}) 
+  # SELECT * FROM table JOIN table2 ON (`table`.`id` = `table2`.`t1_id`)
 
