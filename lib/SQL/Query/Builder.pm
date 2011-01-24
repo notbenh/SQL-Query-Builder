@@ -428,8 +428,6 @@ BEGIN {
 
    has '+type' => default => '';
 
-   # TODO due to part's default join ', ' we are ending up with "FROM table, JOIN table" => bad
-
    # TODO the JOIN table => {} notation should hand that hash to WHERE as to build out things correctly
 
    sub build {
@@ -463,7 +461,6 @@ BEGIN {
       isa => 'Str',
    ;
 
-   # TODO there should be some way to altering this list from the outside for other query types
    use constant QUERY_PARTS => qw{WHAT FROM WHERE HAVING GROUP ORDER LIMIT};
 
    for my $part (QUERY_PARTS) {
@@ -559,17 +556,9 @@ TODO:
 -- the thinking is that they already share the same API
 --- build is very simular
 
-- I would like to move type and column to a role that you include
--- it would be nice that col would 'auto-back_tick' on read or possibly on insert?
-
-
-- one idea for the FROM JOIN issue is to bisect {is_join} and then join all JOINs and the last item of non-JOINs by ' ' then push that back as the last item of the non-JOINs and then join all non-JOINs with ', '... messy but should work. 
--- really highlites the need that PART::build to be a bit more abstract to plug in features like this.
---- look at all builds to see if there are things that should be broken out?
-
 
 __END__
-simple 'finder' wrapper:
+simple 'finder' wrapper (basicly a micro-ORM):
 
 package My::Finder;
 use Mouse;
