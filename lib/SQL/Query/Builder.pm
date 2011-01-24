@@ -213,6 +213,7 @@ BEGIN {
    package SQL::Query::Builder::Query::Part;
    use Mouse;
    use Scalar::Util qw{blessed};
+   with qw{SQL::Query::Builder::Query::Util};
 
    has $_ => 
       is => 'rw',
@@ -222,6 +223,13 @@ BEGIN {
       clearer => qq{clear_$_},
       predicate => qq{has_$_},
    for qw{type column} ;
+   
+   has [map{qq{show_$_}} qw{type column}] => 
+      is => 'rw',
+      isa => 'Bool',
+      default => 0,
+   ;
+
 
    has data => 
       is => 'rw',
@@ -238,6 +246,9 @@ BEGIN {
       default => ', ',
    ;
 
+   sub filter_item { shift; shift; };
+   sub filter_data { shift; [] };
+
    # build returns a partial query string and an arrayref of bind vars
    sub build { 
       my $self = shift;
@@ -245,12 +256,22 @@ BEGIN {
       my @q;
       my @bv;
       foreach my $item (@{ $self->data }) {
-         my ($q,$bv) = blessed($item) && $item->can('build') ? $item->build : $item;
+         my ($q,$bv) = blessed($item) && $item->can('build') 
+                     ? $item->build 
+                     : ( $self->filter_item($item), $self->filter_data( $self->data ) )
+                     ;
          push @q, $q;
          push @bv, @{ $bv || [] };
       }
 
-      return join( $self->joiner, grep{defined} @q), \@bv;
+      return join( $self->joiner, grep{defined} 
+                                  $self->show_column && $self->has_column && length( $self->column ) 
+                                    ? back_tick( $self->column ) : undef 
+                                , $self->show_type   && $self->has_type   
+                                    ?  $self->type               : undef # should never happen
+                                , @q
+                 )
+           , \@bv;
       
    }
 }
@@ -263,15 +284,12 @@ BEGIN {
 
    has '+joiner' => default => ' ';
 
-   # TODO : This should look at data to see if it needs to run build or not?
-   sub build {
-      my $self = shift;
-      my $q = join $self->joiner, grep{defined} 
-                                 $self->has_column ? back_tick( $self->column ) : undef 
-                                , $self->has_type   ?  $self->type               : undef # should never happen
-                                , soq( $self->data );
-      return $q, $self->data;
-   }
+   has '+show_column' => default => 1;
+   has '+show_type'   => default => 1;
+
+   sub filter_item { soq( shift->data ) };
+   sub filter_data { shift->data };
+
 };
    
 
