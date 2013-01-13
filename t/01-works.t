@@ -6,7 +6,6 @@ use warnings;
 use Test::Most qw{no_plan };
 #use SQL::Query::Builder qw{:all};
 use SQL::Query::Builder;
-use Util::Log;
 
 BEGIN { print qq{\n} for 1..10};
 
