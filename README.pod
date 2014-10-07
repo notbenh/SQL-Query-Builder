@@ -5,7 +5,7 @@
   my $dbh = DBI->connect(...);
 
   # start to build out our query object
-  my $query = SELECT->FROM('table')->WHERE(col => [1..3);
+  my $query = SELECT->FROM('table')->WHERE(col => [1..3]);
 
   # because $query is an object we can still modify it 
   $query->LIMIT(2);
@@ -33,7 +33,7 @@ Builds a SQL::Query::Builder::Query::Select object for you.
 Due to SQL::Query::Builder::Query::Select not needing anything at new, any items passed to 
 SELECT will be passed to it's WHAT block. 
 
-  SELECT('something') == SELECT->WHAT('something')
+  SELECT('something') same as SELECT->WHAT('something')
 
 If nothing is passed, WHAT defaults to '*'.
 
